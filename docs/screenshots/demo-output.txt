@@ -1,0 +1,9 @@
+Running concurrent demo with sample inputs...
+You: Hello
+Bot: Hello! I am ready to help with your Python AI bot questions.
+You: Can you help me?
+Bot: Help: try asking about setup, logging, concurrency, or testing.
+You: What is this?
+Bot: I'm not sure how to respond to that yet, but I am learning.
+You: Goodbye
+Bot: Goodbye! Thanks for chatting.
