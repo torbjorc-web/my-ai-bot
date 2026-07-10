@@ -27,5 +27,19 @@ class TestBot(unittest.TestCase):
         self.assertIn("help", results[1].response.lower())
         self.assertIn("Goodbye", results[2].response)
 
+
+class TestBotAsync(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self):
+        self.bot = Bot()
+
+    async def test_async_batch_processing(self):
+        results = await self.bot.process_batch_async(["Hello", "help", "Goodbye"])
+        self.assertEqual(3, len(results))
+        self.assertEqual("Hello", results[0].user_input)
+        self.assertIn("Hello", results[0].response)
+        self.assertIn("help", results[1].response.lower())
+        self.assertIn("Goodbye", results[2].response)
+
 if __name__ == '__main__':
     unittest.main()

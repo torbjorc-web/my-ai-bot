@@ -1,1 +1,1 @@
-# No external dependencies are required for this version.
+openai>=1.0.0

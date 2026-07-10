@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import argparse
 import logging
 
-from src.bot import Bot
-from src.config.settings import LOG_FILE, LOG_LEVEL, MAX_WORKERS
+from src.bot import Bot, create_backend
+from src.config.settings import (
+    DEFAULT_BACKEND,
+    LOG_FILE,
+    LOG_LEVEL,
+    MAX_WORKERS,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    OPENAI_TEMPERATURE,
+    SYSTEM_PROMPT_PATH,
+)
 
 
 def setup_logging() -> None:
@@ -43,12 +53,37 @@ def run_demo(bot: Bot) -> None:
         print(f"Bot: {result.response}")
 
 
+async def run_async_demo(bot: Bot) -> None:
+    demo_inputs = [
+        "Hello",
+        "Can you help me?",
+        "What is concurrency?",
+        "Goodbye",
+    ]
+    print("Running asyncio demo with sample inputs...")
+    results = await bot.process_batch_async(demo_inputs)
+    for result in results:
+        print(f"You: {result.user_input}")
+        print(f"Bot: {result.response}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the AI chatbot")
+    parser.add_argument(
+        "--backend",
+        choices=["rule-based", "openai"],
+        default=DEFAULT_BACKEND,
+        help="Select response backend",
+    )
     parser.add_argument(
         "--demo",
         action="store_true",
         help="Run a non-interactive concurrent demo",
+    )
+    parser.add_argument(
+        "--async-demo",
+        action="store_true",
+        help="Run a non-interactive asyncio demo",
     )
     return parser
 
@@ -58,9 +93,19 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    bot = Bot(max_workers=MAX_WORKERS)
+    backend = create_backend(
+        args.backend,
+        openai_api_key=OPENAI_API_KEY,
+        openai_model=OPENAI_MODEL,
+        openai_temperature=OPENAI_TEMPERATURE,
+        system_prompt_path=SYSTEM_PROMPT_PATH,
+    )
+    bot = Bot(max_workers=MAX_WORKERS, backend=backend)
     if args.demo:
         run_demo(bot)
+        return
+    if args.async_demo:
+        asyncio.run(run_async_demo(bot))
         return
 
     run_interactive(bot)

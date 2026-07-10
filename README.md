@@ -4,6 +4,8 @@ Python AI chatbot demo project with:
 
 - Structured logging to console and file
 - Concurrent message processing using threads
+- Asyncio-based concurrent message processing
+- Optional real LLM backend with OpenAI
 - Interactive and non-interactive demo modes
 - Unit tests and usage documentation
 
@@ -11,6 +13,8 @@ Python AI chatbot demo project with:
 
 - `Bot` class with deterministic intent-based responses
 - Concurrency via `ThreadPoolExecutor` in batch mode
+- Async concurrency via `asyncio` in batch mode
+- Optional OpenAI chat backend (`--backend openai`)
 - Logging configured in one place (`INFO` by default)
 - CLI demo switch for fast presentations
 
@@ -68,10 +72,26 @@ Concurrent demo mode:
 python3 -m src.main --demo
 ```
 
+Async demo mode:
+
+```bash
+python3 -m src.main --async-demo
+```
+
+OpenAI backend mode:
+
+```bash
+export OPENAI_API_KEY="your_key"
+python3 -m src.main --backend openai --demo
+```
+
+If no backend is provided, the default is `rule-based`.
+
 ## Logging
 
 - Log level and file are configured in `src/config/settings.py`
 - Default log file is `bot.log`
+- OpenAI model and temperature are configurable via environment variables
 
 ## Tests
 
@@ -84,3 +104,4 @@ python -m unittest discover -s tests -p "test_*.py"
 - Demo guide: `docs/DEMO.md`
 - CLI screenshot: `docs/screenshots/cli-demo.png`
 - Captured demo transcript: `docs/screenshots/demo-output.txt`
+- Captured async transcript: `docs/screenshots/async-demo-output.txt`
