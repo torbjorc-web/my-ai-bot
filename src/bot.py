@@ -154,12 +154,12 @@ class Bot:
 
     def stream_response(self, user_input: str) -> Iterator[str]:
         """Stream a response in chunks using the configured backend."""
-        self.logger.info("Streaming input: %s", user_input)
+        self.logger.debug("Streaming input: %s", user_input)
         yield from self.backend.stream_generate(user_input)
 
     async def stream_response_async(self, user_input: str) -> AsyncIterator[str]:
         """Asynchronously stream a response in chunks using the backend."""
-        self.logger.info("Streaming input asynchronously: %s", user_input)
+        self.logger.debug("Streaming input asynchronously: %s", user_input)
         async for chunk in self.backend.astream_generate(user_input):
             yield chunk
 
