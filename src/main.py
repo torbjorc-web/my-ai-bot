@@ -8,6 +8,7 @@ import logging
 
 from src.bot import Bot, create_backend
 from src.config.settings import (
+    ALLOW_BACKEND_FALLBACK,
     DEFAULT_BACKEND,
     LOG_FILE,
     LOG_LEVEL,
@@ -15,6 +16,8 @@ from src.config.settings import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     OPENAI_TEMPERATURE,
+    OLLAMA_HOST,
+    OLLAMA_MODEL,
     SYSTEM_PROMPT_PATH,
 )
 
@@ -98,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the AI chatbot")
     parser.add_argument(
         "--backend",
-        choices=["rule-based", "openai"],
+        choices=["rule-based", "openai", "ollama"],
         default=DEFAULT_BACKEND,
         help="Select response backend",
     )
@@ -135,6 +138,9 @@ def main() -> None:
         openai_api_key=OPENAI_API_KEY,
         openai_model=OPENAI_MODEL,
         openai_temperature=OPENAI_TEMPERATURE,
+        ollama_host=OLLAMA_HOST,
+        ollama_model=OLLAMA_MODEL,
+        allow_backend_fallback=ALLOW_BACKEND_FALLBACK,
         system_prompt_path=SYSTEM_PROMPT_PATH,
     )
     bot = Bot(max_workers=MAX_WORKERS, backend=backend)

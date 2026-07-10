@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator, Iterable, Iterator
+from typing import AsyncIterator, Iterable, Iterator, Protocol
+from urllib import request
 
 
 @dataclass(slots=True)
@@ -16,6 +18,22 @@ class ChatResult:
 
     user_input: str
     response: str
+
+
+class BackendProtocol(Protocol):
+    """Behavior contract for all chat backends."""
+
+    def generate(self, user_input: str) -> str:
+        ...
+
+    async def agenerate(self, user_input: str) -> str:
+        ...
+
+    def stream_generate(self, user_input: str) -> Iterator[str]:
+        ...
+
+    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        ...
 
 
 class RuleBasedBackend:
@@ -128,6 +146,109 @@ class OpenAIBackend:
                 yield content
 
 
+class OllamaBackend:
+    """Local Ollama backend over HTTP API, no token required."""
+
+    def __init__(
+        self,
+        model: str,
+        host: str,
+        system_prompt: str,
+        temperature: float,
+        timeout_seconds: int = 60,
+    ) -> None:
+        self.model = model
+        self.host = host.rstrip("/")
+        self.system_prompt = system_prompt
+        self.temperature = temperature
+        self.timeout_seconds = timeout_seconds
+
+    def _post_generate(self, *, prompt: str, stream: bool) -> request.addinfourl:
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "system": self.system_prompt,
+            "stream": stream,
+            "options": {"temperature": self.temperature},
+        }
+        req = request.Request(
+            url=f"{self.host}/api/generate",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        return request.urlopen(req, timeout=self.timeout_seconds)
+
+    def generate(self, user_input: str) -> str:
+        with self._post_generate(prompt=user_input, stream=False) as response:
+            body = json.loads(response.read().decode("utf-8"))
+            return body.get("response", "") or "No response returned."
+
+    async def agenerate(self, user_input: str) -> str:
+        return await asyncio.to_thread(self.generate, user_input)
+
+    def stream_generate(self, user_input: str) -> Iterator[str]:
+        with self._post_generate(prompt=user_input, stream=True) as response:
+            for raw_line in response:
+                line = raw_line.decode("utf-8").strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                chunk = data.get("response", "")
+                if chunk:
+                    yield chunk
+
+    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        for chunk in await asyncio.to_thread(lambda: list(self.stream_generate(user_input))):
+            yield chunk
+
+
+class FallbackBackend:
+    """Fallback wrapper: use secondary backend if primary fails."""
+
+    def __init__(
+        self,
+        primary: BackendProtocol,
+        secondary: BackendProtocol,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self.primary = primary
+        self.secondary = secondary
+        self.logger = logger or logging.getLogger(self.__class__.__name__)
+
+    def generate(self, user_input: str) -> str:
+        try:
+            return self.primary.generate(user_input)
+        except Exception as exc:
+            self.logger.warning("Primary backend failed, using fallback: %s", exc)
+            return self.secondary.generate(user_input)
+
+    async def agenerate(self, user_input: str) -> str:
+        try:
+            return await self.primary.agenerate(user_input)
+        except Exception as exc:
+            self.logger.warning("Primary backend failed, using fallback: %s", exc)
+            return await self.secondary.agenerate(user_input)
+
+    def stream_generate(self, user_input: str) -> Iterator[str]:
+        try:
+            yield from self.primary.stream_generate(user_input)
+            return
+        except Exception as exc:
+            self.logger.warning("Primary stream backend failed, using fallback: %s", exc)
+        yield from self.secondary.stream_generate(user_input)
+
+    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        try:
+            async for chunk in self.primary.astream_generate(user_input):
+                yield chunk
+            return
+        except Exception as exc:
+            self.logger.warning("Primary stream backend failed, using fallback: %s", exc)
+        async for chunk in self.secondary.astream_generate(user_input):
+            yield chunk
+
+
 class Bot:
     """Simple AI-like chatbot with deterministic responses and batching support."""
 
@@ -135,7 +256,7 @@ class Bot:
         self,
         logger: logging.Logger | None = None,
         max_workers: int = 4,
-        backend: RuleBasedBackend | OpenAIBackend | None = None,
+        backend: BackendProtocol | None = None,
     ) -> None:
         self.logger = logger or logging.getLogger(self.__class__.__name__)
         self.max_workers = max_workers
@@ -213,15 +334,46 @@ def create_backend(
     openai_api_key: str,
     openai_model: str,
     openai_temperature: float,
+    ollama_host: str,
+    ollama_model: str,
+    allow_backend_fallback: bool,
     system_prompt_path: str,
-) -> RuleBasedBackend | OpenAIBackend:
+) -> BackendProtocol:
     """Factory for selecting chatbot backend by name."""
     normalized = backend_name.strip().lower()
-    if normalized == "openai":
-        return OpenAIBackend(
-            api_key=openai_api_key,
-            model=openai_model,
-            system_prompt=load_system_prompt(system_prompt_path),
+    prompt = load_system_prompt(system_prompt_path)
+    logger = logging.getLogger("BackendFactory")
+
+    local_chain: BackendProtocol = FallbackBackend(
+        primary=OllamaBackend(
+            model=ollama_model,
+            host=ollama_host,
+            system_prompt=prompt,
             temperature=openai_temperature,
-        )
+        ),
+        secondary=RuleBasedBackend(),
+        logger=logger,
+    )
+
+    if normalized == "ollama":
+        return local_chain
+
+    if normalized == "openai":
+        try:
+            openai_backend = OpenAIBackend(
+                api_key=openai_api_key,
+                model=openai_model,
+                system_prompt=prompt,
+                temperature=openai_temperature,
+            )
+        except Exception:
+            if not allow_backend_fallback:
+                raise
+            logger.warning("OpenAI backend unavailable, using local fallback chain")
+            return local_chain
+
+        if allow_backend_fallback:
+            return FallbackBackend(primary=openai_backend, secondary=local_chain, logger=logger)
+        return openai_backend
+
     return RuleBasedBackend()

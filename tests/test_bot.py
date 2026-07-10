@@ -1,5 +1,5 @@
 import unittest
-from src.bot import Bot  # Adjust the import based on your actual bot class location
+from src.bot import Bot, FallbackBackend, create_backend
 
 
 class TestBot(unittest.TestCase):
@@ -31,6 +31,32 @@ class TestBot(unittest.TestCase):
         chunks = list(self.bot.stream_response("Hello"))
         self.assertGreaterEqual(len(chunks), 1)
         self.assertIn("Hello", "".join(chunks))
+
+    def test_openai_backend_falls_back_without_token(self):
+        backend = create_backend(
+            "openai",
+            openai_api_key="",
+            openai_model="gpt-4o-mini",
+            openai_temperature=0.2,
+            ollama_host="http://127.0.0.1:11434",
+            ollama_model="llama3.1",
+            allow_backend_fallback=True,
+            system_prompt_path="src/prompts/system_prompt.txt",
+        )
+        self.assertIsInstance(backend, FallbackBackend)
+
+    def test_openai_backend_raises_without_token_when_fallback_disabled(self):
+        with self.assertRaises(ValueError):
+            create_backend(
+                "openai",
+                openai_api_key="",
+                openai_model="gpt-4o-mini",
+                openai_temperature=0.2,
+                ollama_host="http://127.0.0.1:11434",
+                ollama_model="llama3.1",
+                allow_backend_fallback=False,
+                system_prompt_path="src/prompts/system_prompt.txt",
+            )
 
 
 class TestBotAsync(unittest.IsolatedAsyncioTestCase):

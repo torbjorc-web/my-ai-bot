@@ -49,6 +49,15 @@ export OPENAI_API_KEY="your_key"
 python3 -m src.main --backend openai --demo
 ```
 
+If `OPENAI_API_KEY` is missing and `ALLOW_BACKEND_FALLBACK=1`, the app automatically falls back to Ollama and then rule-based mode.
+
+Local no-token demo with Ollama:
+
+```bash
+ollama pull llama3.1
+python3 -m src.main --backend ollama --demo
+```
+
 ## 5) Async Interactive Chat
 
 Run:
