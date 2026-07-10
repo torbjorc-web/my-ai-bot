@@ -49,7 +49,23 @@ export OPENAI_API_KEY="your_key"
 python3 -m src.main --backend openai --demo
 ```
 
-## 5) Logging Verification
+## 5) Async Interactive Chat
+
+Run:
+
+```bash
+python3 -m src.main --async-chat
+```
+
+## 6) Streaming Chat Output
+
+Run streaming mode (works best with OpenAI backend):
+
+```bash
+python3 -m src.main --backend openai --stream
+```
+
+## 7) Logging Verification
 
 After running either mode, check log output:
 
@@ -57,7 +73,7 @@ After running either mode, check log output:
 tail -n 20 bot.log
 ```
 
-## 6) Screenshot Assets
+## 8) Screenshot Assets
 
 - `docs/screenshots/cli-demo.png`: CLI screenshot placeholder image
 - `docs/screenshots/demo-output.txt`: Captured output from `--demo`

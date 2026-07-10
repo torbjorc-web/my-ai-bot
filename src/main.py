@@ -30,14 +30,41 @@ def setup_logging() -> None:
     )
 
 
-def run_interactive(bot: Bot) -> None:
+def run_interactive(bot: Bot, *, stream: bool = False) -> None:
     print("Welcome to the AI Bot! Type 'exit' or 'quit' to stop.")
     while True:
         user_input = input("You: ").strip()
         if user_input.lower() in {"exit", "quit"}:
             print("Bot: Goodbye!")
             break
+        if stream:
+            print("Bot: ", end="", flush=True)
+            for chunk in bot.stream_response(user_input):
+                print(chunk, end="", flush=True)
+            print()
+            continue
+
         print(f"Bot: {bot.get_response(user_input)}")
+
+
+async def run_async_interactive(bot: Bot, *, stream: bool = False) -> None:
+    print("Welcome to the async AI Bot! Type 'exit' or 'quit' to stop.")
+    while True:
+        user_input = await asyncio.to_thread(input, "You: ")
+        user_input = user_input.strip()
+        if user_input.lower() in {"exit", "quit"}:
+            print("Bot: Goodbye!")
+            break
+
+        if stream:
+            print("Bot: ", end="", flush=True)
+            async for chunk in bot.stream_response_async(user_input):
+                print(chunk, end="", flush=True)
+            print()
+            continue
+
+        response = await bot.get_response_async(user_input)
+        print(f"Bot: {response}")
 
 
 def run_demo(bot: Bot) -> None:
@@ -85,6 +112,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run a non-interactive asyncio demo",
     )
+    parser.add_argument(
+        "--async-chat",
+        action="store_true",
+        help="Run interactive chat loop using asyncio",
+    )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Stream bot output token-by-token when backend supports it",
+    )
     return parser
 
 
@@ -107,8 +144,11 @@ def main() -> None:
     if args.async_demo:
         asyncio.run(run_async_demo(bot))
         return
+    if args.async_chat:
+        asyncio.run(run_async_interactive(bot, stream=args.stream))
+        return
 
-    run_interactive(bot)
+    run_interactive(bot, stream=args.stream)
 
 
 if __name__ == "__main__":

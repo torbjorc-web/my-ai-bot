@@ -7,7 +7,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import AsyncIterator, Iterable, Iterator
 
 
 @dataclass(slots=True)
@@ -41,6 +41,12 @@ class RuleBasedBackend:
 
     async def agenerate(self, user_input: str) -> str:
         return self.generate(user_input)
+
+    def stream_generate(self, user_input: str) -> Iterator[str]:
+        yield self.generate(user_input)
+
+    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        yield self.generate(user_input)
 
 
 class OpenAIBackend:
@@ -91,6 +97,36 @@ class OpenAIBackend:
         )
         return completion.choices[0].message.content or "No response returned."
 
+    def stream_generate(self, user_input: str) -> Iterator[str]:
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            temperature=self.temperature,
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user_input},
+            ],
+            stream=True,
+        )
+        for chunk in stream:
+            content = chunk.choices[0].delta.content or ""
+            if content:
+                yield content
+
+    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        stream = await self.async_client.chat.completions.create(
+            model=self.model,
+            temperature=self.temperature,
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user_input},
+            ],
+            stream=True,
+        )
+        async for chunk in stream:
+            content = chunk.choices[0].delta.content or ""
+            if content:
+                yield content
+
 
 class Bot:
     """Simple AI-like chatbot with deterministic responses and batching support."""
@@ -115,6 +151,17 @@ class Bot:
         """Return a response asynchronously using the configured backend."""
         self.logger.info("Processing input asynchronously: %s", user_input)
         return await self.backend.agenerate(user_input)
+
+    def stream_response(self, user_input: str) -> Iterator[str]:
+        """Stream a response in chunks using the configured backend."""
+        self.logger.info("Streaming input: %s", user_input)
+        yield from self.backend.stream_generate(user_input)
+
+    async def stream_response_async(self, user_input: str) -> AsyncIterator[str]:
+        """Asynchronously stream a response in chunks using the backend."""
+        self.logger.info("Streaming input asynchronously: %s", user_input)
+        async for chunk in self.backend.astream_generate(user_input):
+            yield chunk
 
     def process_one(self, user_input: str) -> ChatResult:
         """Process one input and keep a structured result."""

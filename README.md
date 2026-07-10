@@ -6,6 +6,7 @@ Python AI chatbot demo project with:
 - Concurrent message processing using threads
 - Asyncio-based concurrent message processing
 - Optional real LLM backend with OpenAI
+- Streaming responses for supported backends
 - Interactive and non-interactive demo modes
 - Unit tests and usage documentation
 
@@ -15,6 +16,7 @@ Python AI chatbot demo project with:
 - Concurrency via `ThreadPoolExecutor` in batch mode
 - Async concurrency via `asyncio` in batch mode
 - Optional OpenAI chat backend (`--backend openai`)
+- Streaming output in interactive and async chat modes (`--stream`)
 - Logging configured in one place (`INFO` by default)
 - CLI demo switch for fast presentations
 
@@ -83,6 +85,18 @@ OpenAI backend mode:
 ```bash
 export OPENAI_API_KEY="your_key"
 python3 -m src.main --backend openai --demo
+```
+
+Async interactive chat loop:
+
+```bash
+python3 -m src.main --async-chat
+```
+
+Streaming in chat mode:
+
+```bash
+python3 -m src.main --backend openai --stream
 ```
 
 If no backend is provided, the default is `rule-based`.

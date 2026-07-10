@@ -27,6 +27,11 @@ class TestBot(unittest.TestCase):
         self.assertIn("help", results[1].response.lower())
         self.assertIn("Goodbye", results[2].response)
 
+    def test_stream_response(self):
+        chunks = list(self.bot.stream_response("Hello"))
+        self.assertGreaterEqual(len(chunks), 1)
+        self.assertIn("Hello", "".join(chunks))
+
 
 class TestBotAsync(unittest.IsolatedAsyncioTestCase):
 
@@ -40,6 +45,13 @@ class TestBotAsync(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Hello", results[0].response)
         self.assertIn("help", results[1].response.lower())
         self.assertIn("Goodbye", results[2].response)
+
+    async def test_async_stream_response(self):
+        chunks = []
+        async for chunk in self.bot.stream_response_async("Goodbye"):
+            chunks.append(chunk)
+        self.assertGreaterEqual(len(chunks), 1)
+        self.assertIn("Goodbye", "".join(chunks))
 
 if __name__ == '__main__':
     unittest.main()
