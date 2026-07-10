@@ -122,6 +122,7 @@ Teach the bot new answers at runtime:
 ```
 
 Then ask the same question again and it will use your taught answer. Learned responses are stored in `data/learned_responses.json` by default.
+Similar phrasing is also matched with fuzzy similarity (configurable via `LEARNING_MIN_SIMILARITY`).
 
 ## Logging
 

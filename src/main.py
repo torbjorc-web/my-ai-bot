@@ -11,6 +11,7 @@ from src.config.settings import (
     ALLOW_BACKEND_FALLBACK,
     DEFAULT_BACKEND,
     ENABLE_LEARNING,
+    LEARNING_MIN_SIMILARITY,
     LEARNING_STORE_PATH,
     LOG_FILE,
     LOG_LEVEL,
@@ -180,6 +181,7 @@ def main() -> None:
         allow_backend_fallback=ALLOW_BACKEND_FALLBACK,
         enable_learning=ENABLE_LEARNING,
         learning_store_path=LEARNING_STORE_PATH,
+        learning_min_similarity=LEARNING_MIN_SIMILARITY,
         system_prompt_path=SYSTEM_PROMPT_PATH,
     )
     bot = Bot(max_workers=MAX_WORKERS, backend=backend)

@@ -44,6 +44,7 @@ class TestBot(unittest.TestCase):
             allow_backend_fallback=True,
             enable_learning=False,
             learning_store_path="data/test-learned.json",
+            learning_min_similarity=0.70,
             system_prompt_path="src/prompts/system_prompt.txt",
         )
         self.assertIsInstance(backend, FallbackBackend)
@@ -60,6 +61,7 @@ class TestBot(unittest.TestCase):
                 allow_backend_fallback=False,
                 enable_learning=False,
                 learning_store_path="data/test-learned.json",
+                learning_min_similarity=0.70,
                 system_prompt_path="src/prompts/system_prompt.txt",
             )
 
@@ -76,6 +78,7 @@ class TestBot(unittest.TestCase):
                 allow_backend_fallback=True,
                 enable_learning=True,
                 learning_store_path=store_path,
+                learning_min_similarity=0.70,
                 system_prompt_path="src/prompts/system_prompt.txt",
             )
             bot = Bot(backend=backend)
@@ -93,10 +96,31 @@ class TestBot(unittest.TestCase):
                 allow_backend_fallback=True,
                 enable_learning=True,
                 learning_store_path=store_path,
+                learning_min_similarity=0.70,
                 system_prompt_path="src/prompts/system_prompt.txt",
             )
             bot_reloaded = Bot(backend=backend_reloaded)
             self.assertIn("ready to help", bot_reloaded.get_response("how do you feel"))
+
+    def test_learning_fuzzy_match(self):
+        with TemporaryDirectory() as tmp_dir:
+            store_path = f"{tmp_dir}/learned.json"
+            backend = create_backend(
+                "rule-based",
+                openai_api_key="",
+                openai_model="gpt-4o-mini",
+                openai_temperature=0.2,
+                ollama_host="http://127.0.0.1:11434",
+                ollama_model="llama3.1",
+                allow_backend_fallback=True,
+                enable_learning=True,
+                learning_store_path=store_path,
+                learning_min_similarity=0.70,
+                system_prompt_path="src/prompts/system_prompt.txt",
+            )
+            bot = Bot(backend=backend)
+            bot.learn("how do you feel", "I feel calm and focused.")
+            self.assertIn("calm and focused", bot.get_response("how are you feeling"))
 
 
 class TestBotAsync(unittest.IsolatedAsyncioTestCase):

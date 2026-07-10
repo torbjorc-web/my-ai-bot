@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -264,16 +265,28 @@ class LearnedBackend:
         self,
         primary: BackendProtocol,
         learning_store_path: str,
+        min_similarity: float,
         logger: logging.Logger | None = None,
     ) -> None:
         self.primary = primary
         self.learning_store_path = learning_store_path
+        self.min_similarity = min_similarity
         self.logger = logger or logging.getLogger(self.__class__.__name__)
         self.learned_map = self._load()
 
     @staticmethod
     def _normalize(text: str) -> str:
         return " ".join(text.strip().lower().split())
+
+    @staticmethod
+    def _similarity(a: str, b: str) -> float:
+        seq_ratio = difflib.SequenceMatcher(a=a, b=b).ratio()
+        a_tokens = set(a.split())
+        b_tokens = set(b.split())
+        token_overlap = 0.0
+        if a_tokens and b_tokens:
+            token_overlap = len(a_tokens & b_tokens) / len(a_tokens | b_tokens)
+        return max(seq_ratio, token_overlap)
 
     def _load(self) -> dict[str, str]:
         path = Path(self.learning_store_path)
@@ -301,7 +314,27 @@ class LearnedBackend:
         self.logger.info("Learned new response for question pattern: %s", q)
 
     def _lookup(self, user_input: str) -> str | None:
-        return self.learned_map.get(self._normalize(user_input))
+        normalized = self._normalize(user_input)
+        direct = self.learned_map.get(normalized)
+        if direct is not None:
+            return direct
+
+        best_match = ""
+        best_score = 0.0
+        for known_question in self.learned_map:
+            score = self._similarity(normalized, known_question)
+            if score > best_score:
+                best_score = score
+                best_match = known_question
+
+        if best_match and best_score >= self.min_similarity:
+            self.logger.info(
+                "Matched learned response using fuzzy similarity %.2f for '%s'",
+                best_score,
+                best_match,
+            )
+            return self.learned_map[best_match]
+        return None
 
     def generate(self, user_input: str) -> str:
         learned = self._lookup(user_input)
@@ -430,6 +463,7 @@ def create_backend(
     allow_backend_fallback: bool,
     enable_learning: bool,
     learning_store_path: str,
+    learning_min_similarity: float,
     system_prompt_path: str,
 ) -> BackendProtocol:
     """Factory for selecting chatbot backend by name."""
@@ -451,7 +485,12 @@ def create_backend(
     if normalized == "ollama":
         selected: BackendProtocol = local_chain
         if enable_learning:
-            return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+            return LearnedBackend(
+                primary=selected,
+                learning_store_path=learning_store_path,
+                min_similarity=learning_min_similarity,
+                logger=logger,
+            )
         return selected
 
     if normalized == "openai":
@@ -468,7 +507,12 @@ def create_backend(
             logger.warning("OpenAI backend unavailable, using local fallback chain")
             selected = local_chain
             if enable_learning:
-                return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+                return LearnedBackend(
+                    primary=selected,
+                    learning_store_path=learning_store_path,
+                    min_similarity=learning_min_similarity,
+                    logger=logger,
+                )
             return selected
 
         if allow_backend_fallback:
@@ -477,10 +521,20 @@ def create_backend(
             selected = openai_backend
 
         if enable_learning:
-            return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+            return LearnedBackend(
+                primary=selected,
+                learning_store_path=learning_store_path,
+                min_similarity=learning_min_similarity,
+                logger=logger,
+            )
         return selected
 
     selected = RuleBasedBackend()
     if enable_learning:
-        return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+        return LearnedBackend(
+            primary=selected,
+            learning_store_path=learning_store_path,
+            min_similarity=learning_min_similarity,
+            logger=logger,
+        )
     return selected
