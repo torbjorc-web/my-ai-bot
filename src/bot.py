@@ -8,7 +8,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator, Iterable, Iterator, Protocol
+from typing import AsyncIterator, Iterable, Iterator, Protocol, runtime_checkable
 from urllib import request
 
 
@@ -33,6 +33,14 @@ class BackendProtocol(Protocol):
         ...
 
     async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        ...
+
+
+@runtime_checkable
+class LearningProtocol(Protocol):
+    """Optional capability for backends that support user-taught answers."""
+
+    def learn(self, question: str, answer: str) -> None:
         ...
 
 
@@ -249,6 +257,80 @@ class FallbackBackend:
             yield chunk
 
 
+class LearnedBackend:
+    """Persistent Q&A memory wrapper around another backend."""
+
+    def __init__(
+        self,
+        primary: BackendProtocol,
+        learning_store_path: str,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self.primary = primary
+        self.learning_store_path = learning_store_path
+        self.logger = logger or logging.getLogger(self.__class__.__name__)
+        self.learned_map = self._load()
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        return " ".join(text.strip().lower().split())
+
+    def _load(self) -> dict[str, str]:
+        path = Path(self.learning_store_path)
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {self._normalize(k): str(v) for k, v in data.items()}
+        except Exception as exc:
+            self.logger.warning("Could not load learning store, starting empty: %s", exc)
+        return {}
+
+    def _save(self) -> None:
+        path = Path(self.learning_store_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.learned_map, indent=2), encoding="utf-8")
+
+    def learn(self, question: str, answer: str) -> None:
+        q = self._normalize(question)
+        if not q:
+            raise ValueError("Question cannot be empty")
+        self.learned_map[q] = answer.strip()
+        self._save()
+        self.logger.info("Learned new response for question pattern: %s", q)
+
+    def _lookup(self, user_input: str) -> str | None:
+        return self.learned_map.get(self._normalize(user_input))
+
+    def generate(self, user_input: str) -> str:
+        learned = self._lookup(user_input)
+        if learned is not None:
+            return learned
+        return self.primary.generate(user_input)
+
+    async def agenerate(self, user_input: str) -> str:
+        learned = self._lookup(user_input)
+        if learned is not None:
+            return learned
+        return await self.primary.agenerate(user_input)
+
+    def stream_generate(self, user_input: str) -> Iterator[str]:
+        learned = self._lookup(user_input)
+        if learned is not None:
+            yield learned
+            return
+        yield from self.primary.stream_generate(user_input)
+
+    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        learned = self._lookup(user_input)
+        if learned is not None:
+            yield learned
+            return
+        async for chunk in self.primary.astream_generate(user_input):
+            yield chunk
+
+
 class Bot:
     """Simple AI-like chatbot with deterministic responses and batching support."""
 
@@ -283,6 +365,15 @@ class Bot:
         self.logger.debug("Streaming input asynchronously: %s", user_input)
         async for chunk in self.backend.astream_generate(user_input):
             yield chunk
+
+    def learn(self, question: str, answer: str) -> bool:
+        """Teach the bot a new answer if the backend supports learning."""
+        if hasattr(self.backend, "learn"):
+            learning_backend = self.backend
+            if isinstance(learning_backend, LearningProtocol):
+                learning_backend.learn(question, answer)
+                return True
+        return False
 
     def process_one(self, user_input: str) -> ChatResult:
         """Process one input and keep a structured result."""
@@ -337,6 +428,8 @@ def create_backend(
     ollama_host: str,
     ollama_model: str,
     allow_backend_fallback: bool,
+    enable_learning: bool,
+    learning_store_path: str,
     system_prompt_path: str,
 ) -> BackendProtocol:
     """Factory for selecting chatbot backend by name."""
@@ -356,7 +449,10 @@ def create_backend(
     )
 
     if normalized == "ollama":
-        return local_chain
+        selected: BackendProtocol = local_chain
+        if enable_learning:
+            return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+        return selected
 
     if normalized == "openai":
         try:
@@ -370,10 +466,21 @@ def create_backend(
             if not allow_backend_fallback:
                 raise
             logger.warning("OpenAI backend unavailable, using local fallback chain")
-            return local_chain
+            selected = local_chain
+            if enable_learning:
+                return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+            return selected
 
         if allow_backend_fallback:
-            return FallbackBackend(primary=openai_backend, secondary=local_chain, logger=logger)
-        return openai_backend
+            selected = FallbackBackend(primary=openai_backend, secondary=local_chain, logger=logger)
+        else:
+            selected = openai_backend
 
-    return RuleBasedBackend()
+        if enable_learning:
+            return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+        return selected
+
+    selected = RuleBasedBackend()
+    if enable_learning:
+        return LearnedBackend(primary=selected, learning_store_path=learning_store_path, logger=logger)
+    return selected

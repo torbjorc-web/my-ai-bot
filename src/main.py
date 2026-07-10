@@ -10,6 +10,8 @@ from src.bot import Bot, create_backend
 from src.config.settings import (
     ALLOW_BACKEND_FALLBACK,
     DEFAULT_BACKEND,
+    ENABLE_LEARNING,
+    LEARNING_STORE_PATH,
     LOG_FILE,
     LOG_LEVEL,
     MAX_WORKERS,
@@ -20,6 +22,20 @@ from src.config.settings import (
     OLLAMA_MODEL,
     SYSTEM_PROMPT_PATH,
 )
+
+
+def _parse_learn_command(user_input: str) -> tuple[str, str] | None:
+    if not user_input.startswith("/learn "):
+        return None
+    payload = user_input[len("/learn "):].strip()
+    if "=>" not in payload:
+        return None
+    question, answer = payload.split("=>", maxsplit=1)
+    question = question.strip()
+    answer = answer.strip()
+    if not question or not answer:
+        return None
+    return question, answer
 
 
 def setup_logging() -> None:
@@ -35,11 +51,22 @@ def setup_logging() -> None:
 
 def run_interactive(bot: Bot, *, stream: bool = False) -> None:
     print("Welcome to the AI Bot! Type 'exit' or 'quit' to stop.")
+    print("Tip: teach it with /learn your question => your answer")
     while True:
         user_input = input("You: ").strip()
         if user_input.lower() in {"exit", "quit"}:
             print("Bot: Goodbye!")
             break
+
+        learn_pair = _parse_learn_command(user_input)
+        if learn_pair is not None:
+            question, answer = learn_pair
+            if bot.learn(question, answer):
+                print("Bot: Learned. Ask that question again to test it.")
+            else:
+                print("Bot: Learning is disabled for this backend.")
+            continue
+
         if stream:
             print("Bot: ", end="", flush=True)
             for chunk in bot.stream_response(user_input):
@@ -52,12 +79,22 @@ def run_interactive(bot: Bot, *, stream: bool = False) -> None:
 
 async def run_async_interactive(bot: Bot, *, stream: bool = False) -> None:
     print("Welcome to the async AI Bot! Type 'exit' or 'quit' to stop.")
+    print("Tip: teach it with /learn your question => your answer")
     while True:
         user_input = await asyncio.to_thread(input, "You: ")
         user_input = user_input.strip()
         if user_input.lower() in {"exit", "quit"}:
             print("Bot: Goodbye!")
             break
+
+        learn_pair = _parse_learn_command(user_input)
+        if learn_pair is not None:
+            question, answer = learn_pair
+            if bot.learn(question, answer):
+                print("Bot: Learned. Ask that question again to test it.")
+            else:
+                print("Bot: Learning is disabled for this backend.")
+            continue
 
         if stream:
             print("Bot: ", end="", flush=True)
@@ -141,6 +178,8 @@ def main() -> None:
         ollama_host=OLLAMA_HOST,
         ollama_model=OLLAMA_MODEL,
         allow_backend_fallback=ALLOW_BACKEND_FALLBACK,
+        enable_learning=ENABLE_LEARNING,
+        learning_store_path=LEARNING_STORE_PATH,
         system_prompt_path=SYSTEM_PROMPT_PATH,
     )
     bot = Bot(max_workers=MAX_WORKERS, backend=backend)

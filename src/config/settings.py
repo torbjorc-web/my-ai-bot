@@ -15,4 +15,6 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+ENABLE_LEARNING = os.getenv("ENABLE_LEARNING", "1") == "1"
+LEARNING_STORE_PATH = os.getenv("LEARNING_STORE_PATH", "data/learned_responses.json")
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH", "src/prompts/system_prompt.txt")

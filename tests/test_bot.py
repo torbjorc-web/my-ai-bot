@@ -1,4 +1,5 @@
 import unittest
+from tempfile import TemporaryDirectory
 from src.bot import Bot, FallbackBackend, create_backend
 
 
@@ -41,6 +42,8 @@ class TestBot(unittest.TestCase):
             ollama_host="http://127.0.0.1:11434",
             ollama_model="llama3.1",
             allow_backend_fallback=True,
+            enable_learning=False,
+            learning_store_path="data/test-learned.json",
             system_prompt_path="src/prompts/system_prompt.txt",
         )
         self.assertIsInstance(backend, FallbackBackend)
@@ -55,8 +58,45 @@ class TestBot(unittest.TestCase):
                 ollama_host="http://127.0.0.1:11434",
                 ollama_model="llama3.1",
                 allow_backend_fallback=False,
+                enable_learning=False,
+                learning_store_path="data/test-learned.json",
                 system_prompt_path="src/prompts/system_prompt.txt",
             )
+
+    def test_learning_persists_custom_response(self):
+        with TemporaryDirectory() as tmp_dir:
+            store_path = f"{tmp_dir}/learned.json"
+            backend = create_backend(
+                "rule-based",
+                openai_api_key="",
+                openai_model="gpt-4o-mini",
+                openai_temperature=0.2,
+                ollama_host="http://127.0.0.1:11434",
+                ollama_model="llama3.1",
+                allow_backend_fallback=True,
+                enable_learning=True,
+                learning_store_path=store_path,
+                system_prompt_path="src/prompts/system_prompt.txt",
+            )
+            bot = Bot(backend=backend)
+            taught = bot.learn("how do you feel", "I feel ready to help.")
+            self.assertTrue(taught)
+            self.assertIn("ready to help", bot.get_response("How do you feel"))
+
+            backend_reloaded = create_backend(
+                "rule-based",
+                openai_api_key="",
+                openai_model="gpt-4o-mini",
+                openai_temperature=0.2,
+                ollama_host="http://127.0.0.1:11434",
+                ollama_model="llama3.1",
+                allow_backend_fallback=True,
+                enable_learning=True,
+                learning_store_path=store_path,
+                system_prompt_path="src/prompts/system_prompt.txt",
+            )
+            bot_reloaded = Bot(backend=backend_reloaded)
+            self.assertIn("ready to help", bot_reloaded.get_response("how do you feel"))
 
 
 class TestBotAsync(unittest.IsolatedAsyncioTestCase):

@@ -115,6 +115,14 @@ python3 -m src.main --backend openai --stream
 If no backend is provided, the default is `rule-based`.
 When `ALLOW_BACKEND_FALLBACK=1`, OpenAI mode will automatically fall back to local Ollama and then rule-based if needed.
 
+Teach the bot new answers at runtime:
+
+```text
+/learn how do you feel => I feel great and ready to help.
+```
+
+Then ask the same question again and it will use your taught answer. Learned responses are stored in `data/learned_responses.json` by default.
+
 ## Logging
 
 - Log level and file are configured in `src/config/settings.py`
