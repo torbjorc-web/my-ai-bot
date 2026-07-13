@@ -9,13 +9,17 @@ from dataclasses import dataclass
 from typing import AsyncIterator, Iterable, Iterator
 
 from src.backends import (
+    BackendSettings,
     BackendProtocol,
     FallbackBackend,
+    InternetSettings,
     InternetAugmentedBackend,
     LearnedBackend,
+    LearningSettings,
     LearningProtocol,
     OllamaBackend,
     OpenAIBackend,
+    ProviderSettings,
     RuleBasedBackend,
     create_backend,
 )

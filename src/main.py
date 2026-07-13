@@ -6,7 +6,7 @@ import asyncio
 import argparse
 import logging
 
-from src.bot import Bot, create_backend
+from src.bot import BackendSettings, Bot, InternetSettings, LearningSettings, ProviderSettings, create_backend
 from src.config.settings import (
     ALLOW_BACKEND_FALLBACK,
     DEFAULT_BACKEND,
@@ -180,27 +180,34 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    backend = create_backend(
-        args.backend,
-        openai_api_key=OPENAI_API_KEY,
-        openai_model=OPENAI_MODEL,
-        openai_temperature=OPENAI_TEMPERATURE,
-        ollama_host=OLLAMA_HOST,
-        ollama_model=OLLAMA_MODEL,
+    settings = BackendSettings(
+        backend_name=args.backend,
         allow_backend_fallback=ALLOW_BACKEND_FALLBACK,
-        enable_learning=ENABLE_LEARNING,
-        learning_store_path=LEARNING_STORE_PATH,
-        learning_min_similarity=LEARNING_MIN_SIMILARITY,
         system_prompt_path=SYSTEM_PROMPT_PATH,
-        enable_internet_learning=ENABLE_INTERNET_LEARNING,
-        internet_cache_path=INTERNET_CACHE_PATH,
-        internet_timeout_seconds=INTERNET_TIMEOUT_SECONDS,
-        internet_max_summary_chars=INTERNET_MAX_SUMMARY_CHARS,
-        internet_cache_ttl_days=INTERNET_CACHE_TTL_DAYS,
-        internet_allowed_domains=INTERNET_ALLOWED_DOMAINS,
-        internet_source_providers=INTERNET_SOURCE_PROVIDERS,
-        internet_max_sources=INTERNET_MAX_SOURCES,
+        providers=ProviderSettings(
+            openai_api_key=OPENAI_API_KEY,
+            openai_model=OPENAI_MODEL,
+            openai_temperature=OPENAI_TEMPERATURE,
+            ollama_host=OLLAMA_HOST,
+            ollama_model=OLLAMA_MODEL,
+        ),
+        learning=LearningSettings(
+            enabled=ENABLE_LEARNING,
+            store_path=LEARNING_STORE_PATH,
+            min_similarity=LEARNING_MIN_SIMILARITY,
+        ),
+        internet=InternetSettings(
+            enabled=ENABLE_INTERNET_LEARNING,
+            cache_path=INTERNET_CACHE_PATH,
+            timeout_seconds=INTERNET_TIMEOUT_SECONDS,
+            max_summary_chars=INTERNET_MAX_SUMMARY_CHARS,
+            cache_ttl_days=INTERNET_CACHE_TTL_DAYS,
+            allowed_domains=INTERNET_ALLOWED_DOMAINS,
+            source_providers=INTERNET_SOURCE_PROVIDERS,
+            max_sources=INTERNET_MAX_SOURCES,
+        ),
     )
+    backend = create_backend(settings)
     bot = Bot(max_workers=MAX_WORKERS, backend=backend)
     if args.demo:
         run_demo(bot)
