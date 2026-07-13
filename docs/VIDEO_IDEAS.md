@@ -1,5 +1,10 @@
 # Video Ideas for Coding-Carlsen: My AI Bot
 
+![Content Plan](https://img.shields.io/badge/content-video%20planning-8250DF)
+![Series](https://img.shields.io/badge/series-3%20videos-1F6FEB)
+![Audience](https://img.shields.io/badge/audience-beginner%20to%20intermediate-0A7EA4)
+![Focus](https://img.shields.io/badge/focus-practical%20AI%20engineering-2EA043)
+
 This document includes three different video concepts with practical recording plans.
 
 ## Channel Positioning

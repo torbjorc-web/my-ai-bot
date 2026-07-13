@@ -1,5 +1,11 @@
 # My AI Bot
 
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-26%20passing-2EA043)
+![Backends](https://img.shields.io/badge/backends-rule--based%20%7C%20ollama%20%7C%20openai-0A7EA4)
+![Internet](https://img.shields.io/badge/internet%20retrieval-Wikipedia%20%2B%20DuckDuckGo-0366D6)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
+
 Python AI chatbot demo project with:
 
 - Structured logging to console and file

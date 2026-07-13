@@ -1,5 +1,10 @@
 # Demo Guide
 
+![Guide](https://img.shields.io/badge/guide-demo%20commands-1F6FEB)
+![Modes](https://img.shields.io/badge/modes-interactive%20%7C%20demo%20%7C%20async-0A7EA4)
+![Streaming](https://img.shields.io/badge/streaming-supported-2EA043)
+![Logging](https://img.shields.io/badge/logging-bot.log-6E7781)
+
 This guide shows how to run and present the chatbot demo.
 
 ## 1) Interactive Mode
