@@ -15,7 +15,9 @@ from src.config.settings import (
     INTERNET_ALLOWED_DOMAINS,
     INTERNET_CACHE_PATH,
     INTERNET_CACHE_TTL_DAYS,
+    INTERNET_MAX_SOURCES,
     INTERNET_MAX_SUMMARY_CHARS,
+    INTERNET_SOURCE_PROVIDERS,
     INTERNET_TIMEOUT_SECONDS,
     LEARNING_MIN_SIMILARITY,
     LEARNING_STORE_PATH,
@@ -195,6 +197,8 @@ def main() -> None:
         internet_max_summary_chars=INTERNET_MAX_SUMMARY_CHARS,
         internet_cache_ttl_days=INTERNET_CACHE_TTL_DAYS,
         internet_allowed_domains=INTERNET_ALLOWED_DOMAINS,
+        internet_source_providers=INTERNET_SOURCE_PROVIDERS,
+        internet_max_sources=INTERNET_MAX_SOURCES,
     )
     bot = Bot(max_workers=MAX_WORKERS, backend=backend)
     if args.demo:

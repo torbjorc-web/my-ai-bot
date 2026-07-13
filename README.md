@@ -20,7 +20,7 @@ Python AI chatbot demo project with:
 - Optional OpenAI chat backend (`--backend openai`)
 - Optional local Ollama backend (`--backend ollama`)
 - Automatic fallback chain: OpenAI -> Ollama -> rule-based
-- Optional Wikipedia lookup and cached reuse for repeated questions
+- Optional multi-source web lookup and cached reuse for repeated questions
 - Streaming output in interactive and async chat modes (`--stream`)
 - Logging configured in one place (`INFO` by default)
 - CLI demo switch for fast presentations
@@ -144,14 +144,16 @@ $env:ENABLE_INTERNET_LEARNING = "1"
 python -m src.main
 ```
 
-When enabled, the bot will try a Wikipedia summary lookup first and store successful results in `data/internet_cache.json`.
+When enabled, the bot will query configured internet providers (default: Wikipedia + DuckDuckGo instant answers) and store successful results in `data/internet_cache.json`.
 You can tune behavior with these environment variables:
 
 - `INTERNET_CACHE_PATH` (default `data/internet_cache.json`)
 - `INTERNET_TIMEOUT_SECONDS` (default `8`)
 - `INTERNET_MAX_SUMMARY_CHARS` (default `700`)
 - `INTERNET_CACHE_TTL_DAYS` (default `14`)
-- `INTERNET_ALLOWED_DOMAINS` (default `en.wikipedia.org,wikipedia.org`)
+- `INTERNET_ALLOWED_DOMAINS` (default `en.wikipedia.org,wikipedia.org,duckduckgo.com`)
+- `INTERNET_SOURCE_PROVIDERS` (default `wikipedia,duckduckgo`)
+- `INTERNET_MAX_SOURCES` (default `2`)
 
 Responses include a source citation block, and cached answers are refreshed after the TTL expires.
 

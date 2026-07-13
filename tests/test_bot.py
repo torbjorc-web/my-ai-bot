@@ -53,6 +53,8 @@ class TestBot(unittest.TestCase):
             internet_max_summary_chars=700,
             internet_cache_ttl_days=14,
             internet_allowed_domains=("en.wikipedia.org", "wikipedia.org"),
+            internet_source_providers=("wikipedia",),
+            internet_max_sources=1,
         )
         self.assertIsInstance(backend, FallbackBackend)
 
@@ -76,6 +78,8 @@ class TestBot(unittest.TestCase):
                 internet_max_summary_chars=700,
                 internet_cache_ttl_days=14,
                 internet_allowed_domains=("en.wikipedia.org", "wikipedia.org"),
+                internet_source_providers=("wikipedia",),
+                internet_max_sources=1,
             )
 
     def test_learning_persists_custom_response(self):
@@ -99,6 +103,8 @@ class TestBot(unittest.TestCase):
                 internet_max_summary_chars=700,
                 internet_cache_ttl_days=14,
                 internet_allowed_domains=("en.wikipedia.org", "wikipedia.org"),
+                internet_source_providers=("wikipedia",),
+                internet_max_sources=1,
             )
             bot = Bot(backend=backend)
             taught = bot.learn("how do you feel", "I feel ready to help.")
@@ -123,6 +129,8 @@ class TestBot(unittest.TestCase):
                 internet_max_summary_chars=700,
                 internet_cache_ttl_days=14,
                 internet_allowed_domains=("en.wikipedia.org", "wikipedia.org"),
+                internet_source_providers=("wikipedia",),
+                internet_max_sources=1,
             )
             bot_reloaded = Bot(backend=backend_reloaded)
             self.assertIn("ready to help", bot_reloaded.get_response("how do you feel"))
@@ -148,6 +156,8 @@ class TestBot(unittest.TestCase):
                 internet_max_summary_chars=700,
                 internet_cache_ttl_days=14,
                 internet_allowed_domains=("en.wikipedia.org", "wikipedia.org"),
+                internet_source_providers=("wikipedia",),
+                internet_max_sources=1,
             )
             bot = Bot(backend=backend)
             bot.learn("how do you feel", "I feel calm and focused.")
@@ -176,6 +186,8 @@ class TestBot(unittest.TestCase):
                 max_summary_chars=200,
                 cache_ttl_days=14,
                 allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
             )
 
             payload = (
@@ -215,6 +227,8 @@ class TestBot(unittest.TestCase):
                 max_summary_chars=200,
                 cache_ttl_days=0,
                 allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
             )
 
             payload = (
@@ -227,6 +241,57 @@ class TestBot(unittest.TestCase):
                 backend.generate("What is Python?")
 
             self.assertEqual(2, mocked_urlopen.call_count)
+
+    def test_internet_augmented_backend_can_return_multiple_sources(self):
+        class _MockResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=Bot().backend,
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=200,
+                cache_ttl_days=14,
+                allowed_domains=("wikipedia.org", "duckduckgo.com"),
+                source_providers=("wikipedia", "duckduckgo"),
+                max_sources=2,
+            )
+
+            wiki_payload = (
+                '{"extract":"Python is a programming language.",'
+                '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Python_(programming_language)"}}}'
+            ).encode("utf-8")
+            ddg_payload = (
+                '{"AbstractText":"Python is a high-level language.",'
+                '"AbstractURL":"https://duckduckgo.com/Python_(programming_language)"}'
+            ).encode("utf-8")
+
+            def _mock_urlopen(req, timeout=0):
+                url = req.full_url
+                if "wikipedia.org" in url:
+                    return _MockResponse(wiki_payload)
+                return _MockResponse(ddg_payload)
+
+            with patch("src.bot.request.urlopen", side_effect=_mock_urlopen):
+                response = backend.generate("What is Python?")
+
+            self.assertIn("Sources:", response)
+            self.assertIn("[1]", response)
+            self.assertIn("[2]", response)
+            self.assertIn("wikipedia.org", response)
+            self.assertIn("duckduckgo.com", response)
 
     def test_internet_augmented_backend_rejects_source_outside_allowlist(self):
         class _MockResponse:
@@ -251,6 +316,8 @@ class TestBot(unittest.TestCase):
                 max_summary_chars=200,
                 cache_ttl_days=14,
                 allowed_domains=("example.com",),
+                source_providers=("wikipedia",),
+                max_sources=1,
             )
 
             payload = (
@@ -282,6 +349,8 @@ class TestBot(unittest.TestCase):
             internet_max_summary_chars=700,
             internet_cache_ttl_days=14,
             internet_allowed_domains=("en.wikipedia.org", "wikipedia.org"),
+            internet_source_providers=("wikipedia",),
+            internet_max_sources=1,
         )
         self.assertIsInstance(backend, InternetAugmentedBackend)
 

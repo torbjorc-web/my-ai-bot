@@ -25,7 +25,16 @@ INTERNET_MAX_SUMMARY_CHARS = int(os.getenv("INTERNET_MAX_SUMMARY_CHARS", "700"))
 INTERNET_CACHE_TTL_DAYS = int(os.getenv("INTERNET_CACHE_TTL_DAYS", "14"))
 INTERNET_ALLOWED_DOMAINS = tuple(
 	item.strip().lower()
-	for item in os.getenv("INTERNET_ALLOWED_DOMAINS", "en.wikipedia.org,wikipedia.org").split(",")
+	for item in os.getenv(
+		"INTERNET_ALLOWED_DOMAINS",
+		"en.wikipedia.org,wikipedia.org,duckduckgo.com",
+	).split(",")
 	if item.strip()
 )
+INTERNET_SOURCE_PROVIDERS = tuple(
+	item.strip().lower()
+	for item in os.getenv("INTERNET_SOURCE_PROVIDERS", "wikipedia,duckduckgo").split(",")
+	if item.strip()
+)
+INTERNET_MAX_SOURCES = int(os.getenv("INTERNET_MAX_SOURCES", "2"))
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH", "src/prompts/system_prompt.txt")

@@ -377,6 +377,8 @@ class InternetAugmentedBackend:
         max_summary_chars: int,
         cache_ttl_days: int,
         allowed_domains: tuple[str, ...],
+        source_providers: tuple[str, ...],
+        max_sources: int,
         logger: logging.Logger | None = None,
     ) -> None:
         self.primary = primary
@@ -387,6 +389,12 @@ class InternetAugmentedBackend:
         self.allowed_domains = tuple(
             domain.strip().lower() for domain in allowed_domains if domain.strip()
         )
+        self.source_providers = tuple(
+            provider.strip().lower()
+            for provider in source_providers
+            if provider.strip()
+        ) or ("wikipedia",)
+        self.max_sources = max(1, max_sources)
         self.logger = logger or logging.getLogger(self.__class__.__name__)
         self.cache = self._load_cache()
 
@@ -454,12 +462,23 @@ class InternetAugmentedBackend:
         return datetime.now(timezone.utc) >= expires_at
 
     def _format_response(self, summary: str, source_url: str) -> str:
+        return self._format_response_multi([(summary, source_url)])
+
+    def _format_response_multi(self, summaries: list[tuple[str, str]]) -> str:
+        summary_lines = [f"- {summary}" for summary, _ in summaries]
+        source_lines = [f"[{idx}] {url}" for idx, (_, url) in enumerate(summaries, start=1)]
         return (
             "I found this online:\n"
-            f"{summary}\n\n"
+            f"{'\n'.join(summary_lines)}\n\n"
             "Sources:\n"
-            f"[1] {source_url}"
+            f"{'\n'.join(source_lines)}"
         )
+
+    def _trim_summary(self, raw_text: str) -> str:
+        trimmed = raw_text[: self.max_summary_chars].rstrip()
+        if len(raw_text) > self.max_summary_chars:
+            trimmed += "..."
+        return trimmed
 
     def _fetch_wikipedia_summary(self, user_input: str) -> tuple[str, str] | None:
         query = self._normalize(user_input)
@@ -493,13 +512,72 @@ class InternetAugmentedBackend:
             self.logger.info("Rejected source outside allowlist: %s", content_url)
             return None
 
-        trimmed = extract[: self.max_summary_chars].rstrip()
-        if len(extract) > self.max_summary_chars:
-            trimmed += "..."
+        trimmed = self._trim_summary(extract)
 
         if not content_url:
             return None
         return trimmed, content_url
+
+    def _fetch_duckduckgo_summary(self, user_input: str) -> tuple[str, str] | None:
+        query = self._normalize(user_input)
+        if not query:
+            return None
+
+        safe_query = quote(query)
+        url = f"https://api.duckduckgo.com/?q={safe_query}&format=json&no_html=1&skip_disambig=1"
+        req = request.Request(
+            url=url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "my-ai-bot/1.0 (internet-learning)",
+            },
+            method="GET",
+        )
+
+        try:
+            with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            self.logger.info("DuckDuckGo lookup failed for '%s': %s", query, exc)
+            return None
+
+        abstract_text = str(data.get("AbstractText", "")).strip()
+        abstract_url = str(data.get("AbstractURL", "")).strip()
+        if not abstract_text or not abstract_url:
+            return None
+        if not self._is_allowed_source(abstract_url):
+            self.logger.info("Rejected source outside allowlist: %s", abstract_url)
+            return None
+
+        return self._trim_summary(abstract_text), abstract_url
+
+    def _fetch_online_sources(self, user_input: str) -> list[tuple[str, str]]:
+        fetchers = {
+            "wikipedia": self._fetch_wikipedia_summary,
+            "duckduckgo": self._fetch_duckduckgo_summary,
+        }
+        collected: list[tuple[str, str]] = []
+        seen_urls: set[str] = set()
+        for provider in self.source_providers:
+            fetcher = fetchers.get(provider)
+            if fetcher is None:
+                self.logger.info("Unknown source provider configured: %s", provider)
+                continue
+
+            snippet = fetcher(user_input)
+            if snippet is None:
+                continue
+
+            summary, source_url = snippet
+            if source_url in seen_urls:
+                continue
+            seen_urls.add(source_url)
+            collected.append((summary, source_url))
+
+            if len(collected) >= self.max_sources:
+                break
+
+        return collected
 
     def generate(self, user_input: str) -> str:
         normalized = self._normalize(user_input)
@@ -507,13 +585,12 @@ class InternetAugmentedBackend:
         if cached is not None and not self._is_stale(cached.get("fetched_at", "")):
             return cached["response"]
 
-        web_answer = self._fetch_wikipedia_summary(user_input)
-        if web_answer is not None:
-            summary, source_url = web_answer
-            response = self._format_response(summary, source_url)
+        web_answers = self._fetch_online_sources(user_input)
+        if web_answers:
+            response = self._format_response_multi(web_answers)
             self.cache[normalized] = {
                 "response": response,
-                "source_url": source_url,
+                "source_url": web_answers[0][1],
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
             }
             self._save_cache()
@@ -642,6 +719,8 @@ def create_backend(
     internet_max_summary_chars: int,
     internet_cache_ttl_days: int,
     internet_allowed_domains: tuple[str, ...],
+    internet_source_providers: tuple[str, ...],
+    internet_max_sources: int,
 ) -> BackendProtocol:
     """Factory for selecting chatbot backend by name."""
     normalized = backend_name.strip().lower()
@@ -669,6 +748,8 @@ def create_backend(
                 max_summary_chars=internet_max_summary_chars,
                 cache_ttl_days=internet_cache_ttl_days,
                 allowed_domains=internet_allowed_domains,
+                source_providers=internet_source_providers,
+                max_sources=internet_max_sources,
                 logger=logger,
             )
         if enable_learning:
@@ -693,6 +774,18 @@ def create_backend(
                 raise
             logger.warning("OpenAI backend unavailable, using local fallback chain")
             selected = local_chain
+            if enable_internet_learning:
+                selected = InternetAugmentedBackend(
+                    primary=selected,
+                    cache_path=internet_cache_path,
+                    timeout_seconds=internet_timeout_seconds,
+                    max_summary_chars=internet_max_summary_chars,
+                    cache_ttl_days=internet_cache_ttl_days,
+                    allowed_domains=internet_allowed_domains,
+                    source_providers=internet_source_providers,
+                    max_sources=internet_max_sources,
+                    logger=logger,
+                )
             if enable_learning:
                 return LearnedBackend(
                     primary=selected,
@@ -715,6 +808,8 @@ def create_backend(
                 max_summary_chars=internet_max_summary_chars,
                 cache_ttl_days=internet_cache_ttl_days,
                 allowed_domains=internet_allowed_domains,
+                source_providers=internet_source_providers,
+                max_sources=internet_max_sources,
                 logger=logger,
             )
 
@@ -736,6 +831,8 @@ def create_backend(
             max_summary_chars=internet_max_summary_chars,
             cache_ttl_days=internet_cache_ttl_days,
             allowed_domains=internet_allowed_domains,
+            source_providers=internet_source_providers,
+            max_sources=internet_max_sources,
             logger=logger,
         )
     if enable_learning:
