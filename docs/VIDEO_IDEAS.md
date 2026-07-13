@@ -1,170 +1,194 @@
 # Video Ideas for Coding-Carlsen: My AI Bot
 
-This document gives you three different videos you can publish around this project, each with a concrete plan you can record in one sitting.
+This document includes three different video concepts with practical recording plans.
 
 ## Channel Positioning
 
 - Profile: Coding-Carlsen
 - Angle: practical AI engineering, not hype
-- Style: build in public + honest debugging + clear takeaways
-- Primary audience: beginner to intermediate Python developers
+- Style: build in public plus honest debugging and clear takeaways
+- Audience: beginner to intermediate Python developers
 
 ## Video 1: Build an AI Bot Without API Keys
 
-### Goal
+### Video 1 Goal
 
-Show that people can run a useful AI bot locally without paying for API usage.
+Show viewers they can run a useful bot without paid API calls.
 
-### Suggested title
+### Video 1 Suggested Title
 
 - Build a Python AI Bot With Zero API Keys (Rule-Based + Ollama)
 
-### Target length
+### Video 1 Target Length
 
 - 8 to 12 minutes
 
-### Hook (first 10 seconds)
+### Video 1 Hook
 
-- "Most AI bot tutorials start with: get an API key. This one starts with: you do not need one."
+- Most AI bot tutorials start with "get an API key". This one starts with "you do not need one".
 
-### Video structure
+### Video 1 Structure
 
 1. Problem setup (0:00 to 1:00)
+
 - Explain API-key friction and cost concerns.
-2. Quick architecture tour (1:00 to 2:30)
+
+1. Quick architecture tour (1:00 to 2:30)
+
 - Show backend choices and default flow.
-3. Live run: no-key mode (2:30 to 5:00)
+
+1. Live run in no-key mode (2:30 to 5:00)
+
 - Run interactive and demo modes.
-4. Optional local model mode (5:00 to 8:00)
-- Show Ollama backend path.
-5. Wrap-up and next step (8:00 to 10:00)
-- Mention internet retrieval and learning as next episode.
 
-### Recording checklist
+1. Optional local model mode (5:00 to 8:00)
 
-- Show terminal commands clearly.
-- Keep font size large enough for mobile viewers.
+- Show the Ollama backend path.
+
+1. Wrap-up and next step (8:00 to 10:00)
+
+- Tease internet retrieval and learning as part two.
+
+### Video 1 Recording Checklist
+
+- Keep terminal font large for mobile viewers.
 - Add one simple architecture slide before coding.
+- Keep command snippets visible for at least 3 seconds.
 
-### CTA
+### Video 1 CTA
 
-- "Comment 'part 2' if you want internet retrieval and source citations."
+- Comment part 2 if you want internet retrieval and source citations.
 
-## Video 2: Make the Bot Learn Better From the Internet Safely
+## Video 2: Add Safe Internet Learning
 
-### Goal
+### Video 2 Goal
 
-Demonstrate internet retrieval, source allowlists, citations, and cache refresh as a real engineering pattern.
+Demonstrate web retrieval done safely with allowlists, citations, and cache refresh.
 
-### Suggested title
+### Video 2 Suggested Title
 
 - I Added Safe Internet Learning to My Python AI Bot (With Source Citations)
 
-### Target length
+### Video 2 Target Length
 
 - 10 to 15 minutes
 
-### Hook (first 10 seconds)
+### Video 2 Hook
 
-- "It is easy to connect a bot to the internet. It is hard to do it safely. Here is how I did both."
+- Connecting a bot to the internet is easy. Doing it safely is the real skill.
 
-### Video structure
+### Video 2 Structure
 
-1. Explain retrieval vs model training (0:00 to 1:30)
-- Clarify this is not weight fine-tuning.
-2. Show feature set (1:30 to 4:00)
-- Multi-source retrieval, domain allowlist, TTL cache.
-3. Live demo (4:00 to 9:00)
-- Ask factual question twice and show cache reuse.
-4. Safety controls walkthrough (9:00 to 12:00)
-- Show env vars for allowed domains and providers.
-5. Trade-offs and limits (12:00 to 14:00)
+1. Retrieval versus training (0:00 to 1:30)
+
+- Clarify this is not model weight fine-tuning.
+
+1. Feature walkthrough (1:30 to 4:00)
+
+- Show multi-source retrieval, allowlist checks, and TTL cache.
+
+1. Live demo (4:00 to 9:00)
+
+- Ask the same factual question twice and show cache reuse.
+
+1. Safety controls walkthrough (9:00 to 12:00)
+
+- Show environment variables for domains and providers.
+
+1. Trade-offs and limits (12:00 to 14:00)
+
 - Explain stale data and source quality risks.
 
-### Recording checklist
+### Video 2 Recording Checklist
 
-- Prepare 3 prompt examples: easy, ambiguous, and blocked-domain case.
-- Show cached file briefly and explain schema.
+- Prepare three prompts: easy, ambiguous, and blocked-domain.
+- Show the cache file briefly and explain the fields.
 - Keep one failure demo in the final cut for authenticity.
 
-### CTA
+### Video 2 CTA
 
-- "If you want, I can open-source a plug-in source ranking module next."
+- If you want, I can publish source ranking and confidence scoring next.
 
-## Video 3: Refactor a 700+ Line Bot File Into Clean Modules
+## Video 3: Refactor a 700+ Line File
 
-### Goal
+### Video 3 Goal
 
-Teach practical codebase scaling and refactoring discipline using your real project history.
+Teach modular architecture by refactoring a real bot file into clear modules.
 
-### Suggested title
+### Video 3 Suggested Title
 
 - From Spaghetti to Scalable: Refactoring My AI Bot Into Modular Python
 
-### Target length
+### Video 3 Target Length
 
 - 9 to 13 minutes
 
-### Hook (first 10 seconds)
+### Video 3 Hook
 
-- "My bot worked, but one file grew to 700+ lines. Here is the refactor that saved future me."
+- My bot worked, but one file grew to 700+ lines. This refactor fixed that.
 
-### Video structure
+### Video 3 Structure
 
 1. Before state and pain points (0:00 to 2:00)
-- Show large file and mixed responsibilities.
-2. Refactor plan (2:00 to 3:30)
-- Define target module boundaries.
-3. Step-by-step migration (3:30 to 8:30)
-- Move providers, wrappers, and factory.
-4. Test pass and compatibility check (8:30 to 10:30)
-- Run tests and show no behavior change.
-5. Lessons learned (10:30 to 12:00)
-- How to avoid big-file relapse.
 
-### Recording checklist
+- Show mixed responsibilities in one large file.
 
-- Capture one commit diff for before/after clarity.
-- Keep a visible checklist on screen while refactoring.
-- Include one "mistake and fix" moment.
+1. Refactor plan (2:00 to 3:30)
 
-### CTA
+- Define target module boundaries and why each exists.
 
-- "Want a full repo template with this structure? I can publish one next."
+1. Step-by-step migration (3:30 to 8:30)
 
-## Publishing Plan (2 Weeks)
+- Move providers, wrappers, and factory code.
 
-1. Week 1, Tuesday
-- Publish Video 1 (no-key bot).
-2. Week 1, Friday
-- Publish Video 2 (safe internet learning).
-3. Week 2, Tuesday
-- Publish Video 3 (refactor architecture).
+1. Validation pass (8:30 to 10:30)
 
-## Short-Form Cuts You Can Reuse
+- Run tests and show behavior unchanged.
 
-- Cut A (20 to 35 sec): "No API key needed" quick demo.
-- Cut B (20 to 40 sec): "Source citations and allowlist" safety snippet.
-- Cut C (25 to 45 sec): "700-line file to modular structure" before/after clip.
+1. Lessons learned (10:30 to 12:00)
+
+- Explain how to avoid growing monolithic files again.
+
+### Video 3 Recording Checklist
+
+- Show one commit diff for before and after clarity.
+- Keep an on-screen checklist while refactoring.
+- Include one mistake and fix moment to keep it real.
+
+### Video 3 CTA
+
+- Want a starter repo template with this structure? I can publish one.
+
+## Two-Week Publishing Plan
+
+1. Week 1 Tuesday: Video 1 (no-key bot)
+2. Week 1 Friday: Video 2 (safe internet learning)
+3. Week 2 Tuesday: Video 3 (modular refactor)
+
+## Short-Form Clips
+
+- Clip A (20 to 35 sec): no API key needed demo.
+- Clip B (20 to 40 sec): source citations and allowlist safety.
+- Clip C (25 to 45 sec): 700 lines to modular architecture.
 
 ## Thumbnail Concepts
 
-- Video 1: "NO API KEY" big text + terminal screenshot.
-- Video 2: "SAFE AI BOT" + lock icon + source list visual.
-- Video 3: "700 LINES -> CLEAN" + split-screen code view.
+- Video 1: NO API KEY text plus terminal screenshot.
+- Video 2: SAFE AI BOT text plus lock icon and source list.
+- Video 3: 700 LINES TO CLEAN split-screen code view.
 
 ## Description Template
 
-Use this for all three videos and customize the middle paragraph:
+Use this structure for each upload:
 
-- What this video teaches in one sentence.
-- Why this approach matters in real projects.
-- Repo link and key commands.
-- Invite viewers to request the next build step.
+1. One sentence on what the video teaches.
+2. One sentence on why it matters in real projects.
+3. Repo link and key commands.
+4. One specific question inviting comments.
 
-## Quick Gear + Workflow Suggestions
+## Production Tips
 
-- Record in 1080p with terminal zoom at 125% to 150%.
-- Capture clean mic audio first; viewers forgive video more than bad audio.
-- Use chapter timestamps in every upload for retention.
-- End each video with one specific next question to drive comments.
+- Record in 1080p and increase terminal zoom to 125 to 150 percent.
+- Prioritize clean mic audio over visual polish.
+- Add chapter timestamps to improve retention.
+- End with one focused next-step question.
