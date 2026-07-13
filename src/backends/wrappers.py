@@ -424,11 +424,11 @@ class InternetAugmentedBackend:
             return raw
         return None
 
-    def _search_wikipedia_title(self, query: str) -> str | None:
+    def _search_wikipedia_titles(self, query: str) -> list[str]:
         safe_query = quote(query)
         search_url = (
             "https://en.wikipedia.org/w/api.php?"
-            f"action=opensearch&search={safe_query}&limit=1&namespace=0&format=json"
+            f"action=opensearch&search={safe_query}&limit=5&namespace=0&format=json"
         )
 
         req = request.Request(
@@ -445,17 +445,22 @@ class InternetAugmentedBackend:
                 raw = json.loads(response.read().decode("utf-8"))
         except Exception as exc:
             self.logger.info("Wikipedia title search failed for '%s': %s", query, exc)
-            return None
+            return []
 
         if not isinstance(raw, list) or len(raw) < 2:
-            return None
+            return []
         titles = raw[1]
         if not isinstance(titles, list) or not titles:
-            return None
-        first_title = titles[0]
-        if not isinstance(first_title, str):
-            return None
-        return first_title.strip() or None
+            return []
+
+        cleaned_titles: list[str] = []
+        for title in titles:
+            if not isinstance(title, str):
+                continue
+            normalized = title.strip()
+            if normalized and normalized not in cleaned_titles:
+                cleaned_titles.append(normalized)
+        return cleaned_titles
 
     def _fetch_wikipedia_summary_with_status(
         self,
@@ -479,9 +484,10 @@ class InternetAugmentedBackend:
 
         for query in queries:
             candidate_titles: list[str] = [query]
-            matched_title = self._search_wikipedia_title(query)
-            if matched_title is not None and matched_title != query:
-                candidate_titles.insert(0, matched_title)
+            matched_titles = self._search_wikipedia_titles(query)
+            for matched_title in reversed(matched_titles):
+                if matched_title != query and matched_title not in candidate_titles:
+                    candidate_titles.insert(0, matched_title)
 
             for title in candidate_titles:
                 safe_title = quote(title)
