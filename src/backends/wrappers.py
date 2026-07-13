@@ -278,14 +278,7 @@ class InternetAugmentedBackend:
             trimmed += "..."
         return trimmed
 
-    def _fetch_wikipedia_summary(self, user_input: str) -> tuple[str, str] | None:
-        query = self._normalize(user_input)
-        if not query:
-            return None
-
-        safe_query = quote(query)
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{safe_query}"
-
+    def _request_json(self, url: str) -> dict[str, object] | None:
         req = request.Request(
             url=url,
             headers={
@@ -297,24 +290,77 @@ class InternetAugmentedBackend:
 
         try:
             with request.urlopen(req, timeout=self.timeout_seconds) as response:
-                data = json.loads(response.read().decode("utf-8"))
+                raw = json.loads(response.read().decode("utf-8"))
         except Exception as exc:
-            self.logger.info("Wikipedia lookup failed for '%s': %s", query, exc)
+            self.logger.info("HTTP lookup failed for '%s': %s", url, exc)
             return None
 
-        extract = str(data.get("extract", "")).strip()
-        content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
-        if not extract:
-            return None
-        if not self._is_allowed_source(content_url):
-            self.logger.info("Rejected source outside allowlist: %s", content_url)
+        if isinstance(raw, dict):
+            return raw
+        return None
+
+    def _search_wikipedia_title(self, query: str) -> str | None:
+        safe_query = quote(query)
+        search_url = (
+            "https://en.wikipedia.org/w/api.php?"
+            f"action=opensearch&search={safe_query}&limit=1&namespace=0&format=json"
+        )
+
+        req = request.Request(
+            url=search_url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "my-ai-bot/1.0 (internet-learning)",
+            },
+            method="GET",
+        )
+
+        try:
+            with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                raw = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            self.logger.info("Wikipedia title search failed for '%s': %s", query, exc)
             return None
 
-        trimmed = self._trim_summary(extract)
-
-        if not content_url:
+        if not isinstance(raw, list) or len(raw) < 2:
             return None
-        return trimmed, content_url
+        titles = raw[1]
+        if not isinstance(titles, list) or not titles:
+            return None
+        first_title = titles[0]
+        if not isinstance(first_title, str):
+            return None
+        return first_title.strip() or None
+
+    def _fetch_wikipedia_summary(self, user_input: str) -> tuple[str, str] | None:
+        query = self._normalize(user_input)
+        if not query:
+            return None
+
+        candidate_titles: list[str] = [query]
+        matched_title = self._search_wikipedia_title(query)
+        if matched_title is not None and matched_title.lower() != query.lower():
+            candidate_titles.insert(0, matched_title)
+
+        for title in candidate_titles:
+            safe_title = quote(title)
+            url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{safe_title}"
+            data = self._request_json(url)
+            if data is None:
+                continue
+
+            extract = str(data.get("extract", "")).strip()
+            content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+            if not extract or not content_url:
+                continue
+            if not self._is_allowed_source(content_url):
+                self.logger.info("Rejected source outside allowlist: %s", content_url)
+                return None
+
+            trimmed = self._trim_summary(extract)
+            return trimmed, content_url
+
+        return None
 
     def _fetch_duckduckgo_summary(self, user_input: str) -> tuple[str, str] | None:
         query = self._normalize(user_input)

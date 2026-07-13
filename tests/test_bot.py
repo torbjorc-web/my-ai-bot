@@ -203,7 +203,7 @@ class TestBot(unittest.TestCase):
             self.assertIn("I found this online", first)
             self.assertIn("wikipedia.org", first)
             self.assertEqual(first, second)
-            self.assertEqual(1, mocked_urlopen.call_count)
+            self.assertEqual(2, mocked_urlopen.call_count)
 
     def test_internet_augmented_backend_refreshes_when_ttl_expires(self):
         class _MockResponse:
@@ -241,7 +241,7 @@ class TestBot(unittest.TestCase):
                 backend.generate("What is Python?")
                 backend.generate("What is Python?")
 
-            self.assertEqual(2, mocked_urlopen.call_count)
+            self.assertEqual(4, mocked_urlopen.call_count)
 
     def test_internet_augmented_backend_can_return_multiple_sources(self):
         class _MockResponse:
@@ -330,6 +330,55 @@ class TestBot(unittest.TestCase):
                 response = backend.generate("What is Python?")
 
             self.assertIn("not sure how to respond", response.lower())
+
+    def test_wikipedia_404_falls_back_to_title_search(self):
+        class _MockResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=cast(BackendProtocol, Bot().backend),
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=200,
+                cache_ttl_days=14,
+                allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
+            )
+
+            search_payload = (
+                '["what is python?", ["Python (programming language)"], [""], [""] ]'
+            ).encode("utf-8")
+            summary_payload = (
+                '{"extract":"Python is a programming language.",'
+                '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Python_(programming_language)"}}}'
+            ).encode("utf-8")
+
+            def _mock_urlopen(req, timeout=0):
+                url = req.full_url
+                if "w/api.php" in url:
+                    return _MockResponse(search_payload)
+                if "Python%20%28programming%20language%29" in url:
+                    return _MockResponse(summary_payload)
+                raise RuntimeError("Not Found")
+
+            with patch("src.backends.wrappers.request.urlopen", side_effect=_mock_urlopen):
+                response = backend.generate("What is Python?")
+
+            self.assertIn("I found this online", response)
+            self.assertIn("wikipedia.org", response)
 
     def test_create_backend_wraps_rule_based_with_internet_backend_when_enabled(self):
         backend = create_backend(
