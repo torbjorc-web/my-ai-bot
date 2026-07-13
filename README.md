@@ -89,15 +89,15 @@ python -m src.main --async-demo
 
 OpenAI backend mode:
 
-```bash
-export OPENAI_API_KEY="your_key"
+```powershell
+$env:OPENAI_API_KEY = "your_key"
 python -m src.main --backend openai --demo
 ```
 
-PowerShell equivalent:
+Bash equivalent:
 
-```powershell
-$env:OPENAI_API_KEY = "your_key"
+```bash
+export OPENAI_API_KEY="your_key"
 python -m src.main --backend openai --demo
 ```
 
