@@ -297,8 +297,10 @@ class InternetAugmentedBackend:
             return None
 
         curated = (
-            "Major examples: London, New York City, Tokyo, Paris, Singapore, Dubai, "
-            "Oslo, Stockholm, Copenhagen, and Drammen.\n"
+            "Major examples across regions: Tokyo, Singapore, Seoul, Mumbai (Asia); "
+            "Lagos, Cairo, Nairobi, Johannesburg (Africa); "
+            "New York City, Mexico City, Sao Paulo, Buenos Aires, Toronto (Americas); "
+            "plus London, Paris, Oslo, Stockholm, Copenhagen, and Drammen in Europe.\n"
             "Tip: ask for one city directly, for example: 'Tell me about Drammen'."
         )
         return f"{self._trim_summary(extract)}\n\n{curated}", content_url
@@ -317,8 +319,11 @@ class InternetAugmentedBackend:
             return None
 
         curated = (
-            "Major capital examples: Oslo (Norway), Stockholm (Sweden), Copenhagen (Denmark), "
-            "London (UK), Paris (France), Tokyo (Japan), and Washington, D.C. (USA).\n"
+            "Major capital examples across regions: Tokyo (Japan), Seoul (South Korea), "
+            "Bangkok (Thailand), New Delhi (India) (Asia); "
+            "Cairo (Egypt), Abuja (Nigeria), Nairobi (Kenya), Pretoria (South Africa) (Africa); "
+            "Washington, D.C. (USA), Mexico City (Mexico), Brasilia (Brazil), Buenos Aires (Argentina) (Americas); "
+            "plus Oslo, Stockholm, Copenhagen, London, and Paris in Europe.\n"
             "Tip: ask for one capital directly, for example: 'Tell me about Oslo'."
         )
         return f"{self._trim_summary(extract)}\n\n{curated}", content_url
