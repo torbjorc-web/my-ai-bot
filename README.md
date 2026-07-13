@@ -150,6 +150,10 @@ You can tune behavior with these environment variables:
 - `INTERNET_CACHE_PATH` (default `data/internet_cache.json`)
 - `INTERNET_TIMEOUT_SECONDS` (default `8`)
 - `INTERNET_MAX_SUMMARY_CHARS` (default `700`)
+- `INTERNET_CACHE_TTL_DAYS` (default `14`)
+- `INTERNET_ALLOWED_DOMAINS` (default `en.wikipedia.org,wikipedia.org`)
+
+Responses include a source citation block, and cached answers are refreshed after the TTL expires.
 
 ## Logging
 

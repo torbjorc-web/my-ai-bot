@@ -7,10 +7,11 @@ import difflib
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Iterable, Iterator, Protocol, runtime_checkable
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from urllib import request
 
 
@@ -374,12 +375,18 @@ class InternetAugmentedBackend:
         cache_path: str,
         timeout_seconds: int,
         max_summary_chars: int,
+        cache_ttl_days: int,
+        allowed_domains: tuple[str, ...],
         logger: logging.Logger | None = None,
     ) -> None:
         self.primary = primary
         self.cache_path = cache_path
         self.timeout_seconds = timeout_seconds
         self.max_summary_chars = max_summary_chars
+        self.cache_ttl_days = max(cache_ttl_days, 0)
+        self.allowed_domains = tuple(
+            domain.strip().lower() for domain in allowed_domains if domain.strip()
+        )
         self.logger = logger or logging.getLogger(self.__class__.__name__)
         self.cache = self._load_cache()
 
@@ -387,14 +394,33 @@ class InternetAugmentedBackend:
     def _normalize(text: str) -> str:
         return " ".join(text.strip().lower().split())
 
-    def _load_cache(self) -> dict[str, str]:
+    def _load_cache(self) -> dict[str, dict[str, str]]:
         path = Path(self.cache_path)
         if not path.exists():
             return {}
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                return {self._normalize(k): str(v) for k, v in data.items()}
+                normalized: dict[str, dict[str, str]] = {}
+                for key, value in data.items():
+                    normalized_key = self._normalize(str(key))
+                    if isinstance(value, str):
+                        normalized[normalized_key] = {
+                            "response": value,
+                            "source_url": "",
+                            "fetched_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        continue
+                    if isinstance(value, dict):
+                        response = str(value.get("response", "")).strip()
+                        if not response:
+                            continue
+                        normalized[normalized_key] = {
+                            "response": response,
+                            "source_url": str(value.get("source_url", "")).strip(),
+                            "fetched_at": str(value.get("fetched_at", "")).strip(),
+                        }
+                return normalized
         except Exception as exc:
             self.logger.warning("Could not load internet cache, starting empty: %s", exc)
         return {}
@@ -404,7 +430,38 @@ class InternetAugmentedBackend:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.cache, indent=2), encoding="utf-8")
 
-    def _fetch_wikipedia_summary(self, user_input: str) -> str | None:
+    def _is_allowed_source(self, source_url: str) -> bool:
+        if not source_url:
+            return False
+        if not self.allowed_domains:
+            return True
+        parsed = urlparse(source_url)
+        host = (parsed.hostname or "").lower()
+        return any(host == domain or host.endswith(f".{domain}") for domain in self.allowed_domains)
+
+    def _is_stale(self, fetched_at: str) -> bool:
+        if self.cache_ttl_days == 0:
+            return True
+        if not fetched_at:
+            return True
+        try:
+            fetched_dt = datetime.fromisoformat(fetched_at)
+        except ValueError:
+            return True
+        if fetched_dt.tzinfo is None:
+            fetched_dt = fetched_dt.replace(tzinfo=timezone.utc)
+        expires_at = fetched_dt + timedelta(days=self.cache_ttl_days)
+        return datetime.now(timezone.utc) >= expires_at
+
+    def _format_response(self, summary: str, source_url: str) -> str:
+        return (
+            "I found this online:\n"
+            f"{summary}\n\n"
+            "Sources:\n"
+            f"[1] {source_url}"
+        )
+
+    def _fetch_wikipedia_summary(self, user_input: str) -> tuple[str, str] | None:
         query = self._normalize(user_input)
         if not query:
             return None
@@ -432,27 +489,39 @@ class InternetAugmentedBackend:
         content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
         if not extract:
             return None
+        if not self._is_allowed_source(content_url):
+            self.logger.info("Rejected source outside allowlist: %s", content_url)
+            return None
 
         trimmed = extract[: self.max_summary_chars].rstrip()
         if len(extract) > self.max_summary_chars:
             trimmed += "..."
 
-        if content_url:
-            return f"{trimmed}\nSource: {content_url}"
-        return trimmed
+        if not content_url:
+            return None
+        return trimmed, content_url
 
     def generate(self, user_input: str) -> str:
         normalized = self._normalize(user_input)
         cached = self.cache.get(normalized)
-        if cached is not None:
-            return cached
+        if cached is not None and not self._is_stale(cached.get("fetched_at", "")):
+            return cached["response"]
 
         web_answer = self._fetch_wikipedia_summary(user_input)
         if web_answer is not None:
-            response = f"I found this online:\n{web_answer}"
-            self.cache[normalized] = response
+            summary, source_url = web_answer
+            response = self._format_response(summary, source_url)
+            self.cache[normalized] = {
+                "response": response,
+                "source_url": source_url,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
             self._save_cache()
             return response
+
+        if cached is not None:
+            # Keep stale data as a fallback when refresh fails.
+            return cached["response"]
 
         return self.primary.generate(user_input)
 
@@ -571,6 +640,8 @@ def create_backend(
     internet_cache_path: str,
     internet_timeout_seconds: int,
     internet_max_summary_chars: int,
+    internet_cache_ttl_days: int,
+    internet_allowed_domains: tuple[str, ...],
 ) -> BackendProtocol:
     """Factory for selecting chatbot backend by name."""
     normalized = backend_name.strip().lower()
@@ -596,6 +667,8 @@ def create_backend(
                 cache_path=internet_cache_path,
                 timeout_seconds=internet_timeout_seconds,
                 max_summary_chars=internet_max_summary_chars,
+                cache_ttl_days=internet_cache_ttl_days,
+                allowed_domains=internet_allowed_domains,
                 logger=logger,
             )
         if enable_learning:
@@ -640,6 +713,8 @@ def create_backend(
                 cache_path=internet_cache_path,
                 timeout_seconds=internet_timeout_seconds,
                 max_summary_chars=internet_max_summary_chars,
+                cache_ttl_days=internet_cache_ttl_days,
+                allowed_domains=internet_allowed_domains,
                 logger=logger,
             )
 
@@ -659,6 +734,8 @@ def create_backend(
             cache_path=internet_cache_path,
             timeout_seconds=internet_timeout_seconds,
             max_summary_chars=internet_max_summary_chars,
+            cache_ttl_days=internet_cache_ttl_days,
+            allowed_domains=internet_allowed_domains,
             logger=logger,
         )
     if enable_learning:

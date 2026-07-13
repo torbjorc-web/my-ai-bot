@@ -22,4 +22,10 @@ ENABLE_INTERNET_LEARNING = os.getenv("ENABLE_INTERNET_LEARNING", "0") == "1"
 INTERNET_CACHE_PATH = os.getenv("INTERNET_CACHE_PATH", "data/internet_cache.json")
 INTERNET_TIMEOUT_SECONDS = int(os.getenv("INTERNET_TIMEOUT_SECONDS", "8"))
 INTERNET_MAX_SUMMARY_CHARS = int(os.getenv("INTERNET_MAX_SUMMARY_CHARS", "700"))
+INTERNET_CACHE_TTL_DAYS = int(os.getenv("INTERNET_CACHE_TTL_DAYS", "14"))
+INTERNET_ALLOWED_DOMAINS = tuple(
+	item.strip().lower()
+	for item in os.getenv("INTERNET_ALLOWED_DOMAINS", "en.wikipedia.org,wikipedia.org").split(",")
+	if item.strip()
+)
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH", "src/prompts/system_prompt.txt")
