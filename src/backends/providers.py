@@ -7,6 +7,7 @@ import json
 import threading
 from typing import AsyncIterator, Iterator
 from urllib import request
+from urllib.response import addinfourl
 
 
 class RuleBasedBackend:
@@ -136,7 +137,7 @@ class OllamaBackend:
         self.temperature = temperature
         self.timeout_seconds = timeout_seconds
 
-    def _post_generate(self, *, prompt: str, stream: bool) -> request.addinfourl:
+    def _post_generate(self, *, prompt: str, stream: bool) -> addinfourl:
         payload = {
             "model": self.model,
             "prompt": prompt,

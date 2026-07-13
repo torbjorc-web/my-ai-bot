@@ -222,6 +222,19 @@ class InternetAugmentedBackend:
     def _normalize(text: str) -> str:
         return " ".join(text.strip().lower().split())
 
+    @staticmethod
+    def _extract_wikipedia_page_url(data: dict[str, object]) -> str:
+        content_urls = data.get("content_urls")
+        if not isinstance(content_urls, dict):
+            return ""
+        desktop = content_urls.get("desktop")
+        if not isinstance(desktop, dict):
+            return ""
+        page = desktop.get("page")
+        if not isinstance(page, str):
+            return ""
+        return page.strip()
+
     def _build_query_candidates(self, user_input: str) -> list[str]:
         normalized = self._normalize(user_input)
         # Keep only letters/numbers/spaces for retrieval queries.
@@ -308,7 +321,7 @@ class InternetAugmentedBackend:
             return None
 
         extract = str(data.get("extract", "")).strip()
-        content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+        content_url = self._extract_wikipedia_page_url(data)
         if not extract or not content_url:
             return None
         if not self._is_allowed_source(content_url):
@@ -330,7 +343,7 @@ class InternetAugmentedBackend:
             return None
 
         extract = str(data.get("extract", "")).strip()
-        content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+        content_url = self._extract_wikipedia_page_url(data)
         if not extract or not content_url:
             return None
         if not self._is_allowed_source(content_url):
@@ -522,7 +535,7 @@ class InternetAugmentedBackend:
                     continue
 
                 extract = str(data.get("extract", "")).strip()
-                content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+                content_url = self._extract_wikipedia_page_url(data)
                 if not extract or not content_url:
                     continue
                 if not self._is_allowed_source(content_url):
