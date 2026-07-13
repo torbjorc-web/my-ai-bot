@@ -25,7 +25,7 @@ Python AI chatbot demo project with:
 
 ## Project Structure
 
-```
+```text
 my-ai-bot
 ├── src
 │   ├── bot.py
@@ -50,7 +50,7 @@ my-ai-bot
 ## Setup
 
 1. Clone and enter project.
-2. Optional virtualenv:
+1. Optional virtualenv:
 
 ```bash
 python -m venv .venv
@@ -61,7 +61,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Install requirements:
+1. Install requirements:
 
 ```bash
 pip install -r requirements.txt
