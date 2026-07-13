@@ -87,7 +87,7 @@ def create_backend(
                 system_prompt=prompt,
                 temperature=openai_temperature,
             )
-        except Exception:
+        except (RuntimeError, ValueError):
             if not allow_backend_fallback:
                 raise
             logger.warning("OpenAI backend unavailable, using local fallback chain")

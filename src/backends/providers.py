@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from typing import AsyncIterator, Iterator
 from urllib import request
 
@@ -171,5 +172,28 @@ class OllamaBackend:
                     yield chunk
 
     async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
-        for chunk in await asyncio.to_thread(lambda: list(self.stream_generate(user_input))):
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        stream_errors: list[Exception] = []
+
+        def _producer() -> None:
+            try:
+                for chunk in self.stream_generate(user_input):
+                    asyncio.run_coroutine_threadsafe(queue.put(chunk), loop).result()
+            except Exception as exc:  # pragma: no cover - exercised via consumer raise
+                stream_errors.append(exc)
+            finally:
+                asyncio.run_coroutine_threadsafe(queue.put(None), loop).result()
+
+        thread = threading.Thread(target=_producer, daemon=True)
+        thread.start()
+
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
             yield chunk
+
+        thread.join(timeout=0.1)
+        if stream_errors:
+            raise stream_errors[0]

@@ -29,10 +29,22 @@ class FallbackBackend:
         self.secondary = secondary
         self.logger = logger or logging.getLogger(self.__class__.__name__)
 
+    @staticmethod
+    def _is_backend_failure(exc: Exception) -> bool:
+        backend_exceptions = (OSError, TimeoutError, RuntimeError, ValueError)
+        if isinstance(exc, backend_exceptions):
+            return True
+
+        exc_name = exc.__class__.__name__.lower()
+        module_name = exc.__class__.__module__.lower()
+        return "openai" in exc_name or "openai" in module_name or "httpx" in module_name
+
     def generate(self, user_input: str) -> str:
         try:
             return self.primary.generate(user_input)
         except Exception as exc:
+            if not self._is_backend_failure(exc):
+                raise
             self.logger.warning("Primary backend failed, using fallback: %s", exc)
             return self.secondary.generate(user_input)
 
@@ -40,6 +52,8 @@ class FallbackBackend:
         try:
             return await self.primary.agenerate(user_input)
         except Exception as exc:
+            if not self._is_backend_failure(exc):
+                raise
             self.logger.warning("Primary backend failed, using fallback: %s", exc)
             return await self.secondary.agenerate(user_input)
 
@@ -48,6 +62,8 @@ class FallbackBackend:
             yield from self.primary.stream_generate(user_input)
             return
         except Exception as exc:
+            if not self._is_backend_failure(exc):
+                raise
             self.logger.warning("Primary stream backend failed, using fallback: %s", exc)
         yield from self.secondary.stream_generate(user_input)
 
@@ -57,6 +73,8 @@ class FallbackBackend:
                 yield chunk
             return
         except Exception as exc:
+            if not self._is_backend_failure(exc):
+                raise
             self.logger.warning("Primary stream backend failed, using fallback: %s", exc)
         async for chunk in self.secondary.astream_generate(user_input):
             yield chunk

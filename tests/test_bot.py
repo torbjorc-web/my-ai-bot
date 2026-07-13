@@ -83,6 +83,52 @@ class TestBot(unittest.TestCase):
                 internet_max_sources=1,
             )
 
+    def test_fallback_backend_uses_secondary_on_runtime_failure(self):
+        class _FailingBackend:
+            def generate(self, user_input: str) -> str:
+                raise RuntimeError("backend unavailable")
+
+            async def agenerate(self, user_input: str) -> str:
+                raise RuntimeError("backend unavailable")
+
+            def stream_generate(self, user_input: str):
+                raise RuntimeError("backend unavailable")
+                yield ""
+
+            async def astream_generate(self, user_input: str):
+                raise RuntimeError("backend unavailable")
+                yield ""
+
+        fallback = FallbackBackend(
+            primary=cast(BackendProtocol, _FailingBackend()),
+            secondary=cast(BackendProtocol, Bot().backend),
+        )
+        response = fallback.generate("hello")
+        self.assertIn("hello", response.lower())
+
+    def test_fallback_backend_reraises_programming_error(self):
+        class _BrokenBackend:
+            def generate(self, user_input: str) -> str:
+                raise AttributeError("bug in backend")
+
+            async def agenerate(self, user_input: str) -> str:
+                raise AttributeError("bug in backend")
+
+            def stream_generate(self, user_input: str):
+                raise AttributeError("bug in backend")
+                yield ""
+
+            async def astream_generate(self, user_input: str):
+                raise AttributeError("bug in backend")
+                yield ""
+
+        fallback = FallbackBackend(
+            primary=cast(BackendProtocol, _BrokenBackend()),
+            secondary=cast(BackendProtocol, Bot().backend),
+        )
+        with self.assertRaises(AttributeError):
+            fallback.generate("hello")
+
     def test_learning_persists_custom_response(self):
         with TemporaryDirectory() as tmp_dir:
             store_path = f"{tmp_dir}/learned.json"
