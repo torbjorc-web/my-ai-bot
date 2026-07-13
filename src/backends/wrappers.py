@@ -234,6 +234,70 @@ class InternetAugmentedBackend:
 
         return candidates
 
+    @staticmethod
+    def _is_major_cities_query(user_input: str) -> bool:
+        query = user_input.lower()
+        has_city_topic = "city" in query or "cities" in query or "capital" in query or "capitals" in query
+        is_broad = (
+            "major" in query
+            or "largest" in query
+            or "world" in query
+            or "around the world" in query
+            or "in the world" in query
+        )
+        return has_city_topic and is_broad
+
+    def _build_city_topic_candidates(self, user_input: str) -> list[str]:
+        candidates = self._build_query_candidates(user_input)
+        city_terms = {
+            "tell",
+            "me",
+            "please",
+            "city",
+            "cities",
+            "capital",
+            "capitals",
+            "major",
+            "largest",
+            "world",
+            "great",
+            "information",
+            "info",
+            "about",
+        }
+
+        reduced: list[str] = []
+        for candidate in candidates:
+            tokens = [token for token in candidate.split() if token not in city_terms]
+            cleaned = " ".join(tokens).strip()
+            if cleaned and cleaned not in reduced and cleaned not in candidates:
+                reduced.append(cleaned)
+
+        for item in reduced:
+            candidates.append(item)
+
+        return candidates
+
+    def _get_major_cities_overview(self) -> tuple[str, str] | None:
+        summary_url = "https://en.wikipedia.org/api/rest_v1/page/summary/Global_city"
+        data = self._request_json(summary_url)
+        if data is None:
+            return None
+
+        extract = str(data.get("extract", "")).strip()
+        content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+        if not extract or not content_url:
+            return None
+        if not self._is_allowed_source(content_url):
+            return None
+
+        curated = (
+            "Major examples: London, New York City, Tokyo, Paris, Singapore, Dubai, "
+            "Oslo, Stockholm, Copenhagen, and Drammen.\n"
+            "Tip: ask for one city directly, for example: 'Tell me about Drammen'."
+        )
+        return f"{self._trim_summary(extract)}\n\n{curated}", content_url
+
     def _load_cache(self) -> dict[str, dict[str, str]]:
         path = Path(self.cache_path)
         if not path.exists():
@@ -367,7 +431,12 @@ class InternetAugmentedBackend:
         self,
         user_input: str,
     ) -> tuple[tuple[str, str] | None, bool]:
-        queries = self._build_query_candidates(user_input)
+        if self._is_major_cities_query(user_input):
+            overview = self._get_major_cities_overview()
+            if overview is not None:
+                return overview, False
+
+        queries = self._build_city_topic_candidates(user_input)
         if not queries:
             return None, False
 

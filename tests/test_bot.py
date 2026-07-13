@@ -450,6 +450,92 @@ class TestBot(unittest.TestCase):
             self.assertIn("I found this online", response)
             self.assertIn("/wiki/London", response)
 
+    def test_major_cities_query_returns_overview_with_examples(self):
+        class _MockResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=cast(BackendProtocol, Bot().backend),
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=300,
+                cache_ttl_days=14,
+                allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
+            )
+
+            payload = (
+                '{"extract":"A global city is a city which is a primary node in the global economic network.",'
+                '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Global_city"}}}'
+            ).encode("utf-8")
+
+            with patch("src.backends.wrappers.request.urlopen", return_value=_MockResponse(payload)):
+                response = backend.generate("What are some major cities in the world?")
+
+            self.assertIn("major examples", response.lower())
+            self.assertIn("drammen", response.lower())
+            self.assertIn("/wiki/Global_city", response)
+
+    def test_specific_city_query_extracts_city_topic(self):
+        class _MockResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=cast(BackendProtocol, Bot().backend),
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=250,
+                cache_ttl_days=14,
+                allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
+            )
+
+            search_hit_payload = '["drammen", ["Drammen"], [""], [""] ]'.encode("utf-8")
+            summary_payload = (
+                '{"extract":"Drammen is a city in Buskerud county, Norway.",'
+                '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Drammen"}}}'
+            ).encode("utf-8")
+
+            def _mock_urlopen(req, timeout=0):
+                url = req.full_url
+                if "w/api.php" in url and "search=drammen" in url:
+                    return _MockResponse(search_hit_payload)
+                if "page/summary/Drammen" in url:
+                    return _MockResponse(summary_payload)
+                raise RuntimeError("Not Found")
+
+            with patch("src.backends.wrappers.request.urlopen", side_effect=_mock_urlopen):
+                response = backend.generate("Tell me information about great city Drammen")
+
+            self.assertIn("I found this online", response)
+            self.assertIn("/wiki/Drammen", response)
+
     def test_create_backend_wraps_rule_based_with_internet_backend_when_enabled(self):
         backend = create_backend(
             "rule-based",
