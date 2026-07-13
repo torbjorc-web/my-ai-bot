@@ -6,6 +6,7 @@ import asyncio
 import difflib
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import AsyncIterator, Iterator
@@ -203,6 +204,36 @@ class InternetAugmentedBackend:
     def _normalize(text: str) -> str:
         return " ".join(text.strip().lower().split())
 
+    def _build_query_candidates(self, user_input: str) -> list[str]:
+        normalized = self._normalize(user_input)
+        # Keep only letters/numbers/spaces for retrieval queries.
+        cleaned = re.sub(r"[^\w\s]", " ", normalized).strip()
+        cleaned = " ".join(cleaned.split())
+        if not cleaned:
+            return []
+
+        candidates: list[str] = []
+
+        def _add(candidate: str) -> None:
+            value = candidate.strip()
+            if value and value not in candidates:
+                candidates.append(value)
+
+        _add(cleaned)
+
+        # Handle common question-style phrasing.
+        shortened = re.sub(
+            r"^(what|who|where|when|why|how)\s+(is|are|was|were|do|does|did|can|could|would|should)\s+",
+            "",
+            cleaned,
+        )
+        _add(shortened)
+
+        shortened = re.sub(r"^(tell me about|information about|facts about|about)\s+", "", cleaned)
+        _add(shortened)
+
+        return candidates
+
     def _load_cache(self) -> dict[str, dict[str, str]]:
         path = Path(self.cache_path)
         if not path.exists():
@@ -336,35 +367,36 @@ class InternetAugmentedBackend:
         self,
         user_input: str,
     ) -> tuple[tuple[str, str] | None, bool]:
-        query = self._normalize(user_input)
-        if not query:
+        queries = self._build_query_candidates(user_input)
+        if not queries:
             return None, False
-
-        candidate_titles: list[str] = [query]
-        matched_title = self._search_wikipedia_title(query)
-        if matched_title is not None and matched_title.lower() != query.lower():
-            candidate_titles.insert(0, matched_title)
 
         had_lookup_error = False
 
-        for title in candidate_titles:
-            safe_title = quote(title)
-            url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{safe_title}"
-            data = self._request_json(url)
-            if data is None:
-                had_lookup_error = True
-                continue
+        for query in queries:
+            candidate_titles: list[str] = [query]
+            matched_title = self._search_wikipedia_title(query)
+            if matched_title is not None and matched_title != query:
+                candidate_titles.insert(0, matched_title)
 
-            extract = str(data.get("extract", "")).strip()
-            content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
-            if not extract or not content_url:
-                continue
-            if not self._is_allowed_source(content_url):
-                self.logger.info("Rejected source outside allowlist: %s", content_url)
-                return None, False
+            for title in candidate_titles:
+                safe_title = quote(title)
+                url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{safe_title}"
+                data = self._request_json(url)
+                if data is None:
+                    had_lookup_error = True
+                    continue
 
-            trimmed = self._trim_summary(extract)
-            return (trimmed, content_url), False
+                extract = str(data.get("extract", "")).strip()
+                content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+                if not extract or not content_url:
+                    continue
+                if not self._is_allowed_source(content_url):
+                    self.logger.info("Rejected source outside allowlist: %s", content_url)
+                    return None, False
+
+                trimmed = self._trim_summary(extract)
+                return (trimmed, content_url), False
 
         return None, had_lookup_error
 
@@ -373,37 +405,43 @@ class InternetAugmentedBackend:
         return snippet
 
     def _fetch_duckduckgo_summary(self, user_input: str) -> tuple[str, str] | None:
-        query = self._normalize(user_input)
-        if not query:
+        queries = self._build_query_candidates(user_input)
+        if not queries:
             return None
 
-        safe_query = quote(query)
-        url = f"https://api.duckduckgo.com/?q={safe_query}&format=json&no_html=1&skip_disambig=1"
-        req = request.Request(
-            url=url,
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "my-ai-bot/1.0 (internet-learning)",
-            },
-            method="GET",
-        )
+        for query in queries:
+            safe_query = quote(query)
+            url = (
+                "https://api.duckduckgo.com/?"
+                f"q={safe_query}&format=json&no_html=1&skip_disambig=1"
+            )
+            req = request.Request(
+                url=url,
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "my-ai-bot/1.0 (internet-learning)",
+                },
+                method="GET",
+            )
 
-        try:
-            with request.urlopen(req, timeout=self.timeout_seconds) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        except Exception as exc:
-            self.logger.info("DuckDuckGo lookup failed for '%s': %s", query, exc)
-            return None
+            try:
+                with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+            except Exception as exc:
+                self.logger.info("DuckDuckGo lookup failed for '%s': %s", query, exc)
+                continue
 
-        abstract_text = str(data.get("AbstractText", "")).strip()
-        abstract_url = str(data.get("AbstractURL", "")).strip()
-        if not abstract_text or not abstract_url:
-            return None
-        if not self._is_allowed_source(abstract_url):
-            self.logger.info("Rejected source outside allowlist: %s", abstract_url)
-            return None
+            abstract_text = str(data.get("AbstractText", "")).strip()
+            abstract_url = str(data.get("AbstractURL", "")).strip()
+            if not abstract_text or not abstract_url:
+                continue
+            if not self._is_allowed_source(abstract_url):
+                self.logger.info("Rejected source outside allowlist: %s", abstract_url)
+                return None
 
-        return self._trim_summary(abstract_text), abstract_url
+            return self._trim_summary(abstract_text), abstract_url
+
+        return None
 
     def _fetch_online_sources(self, user_input: str) -> tuple[list[tuple[str, str]], dict[str, bool]]:
         fetchers = {
