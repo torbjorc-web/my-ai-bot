@@ -66,11 +66,10 @@ class Bot:
 
     def learn(self, question: str, answer: str) -> bool:
         """Teach the bot a new answer if the backend supports learning."""
-        if hasattr(self.backend, "learn"):
-            learning_backend = self.backend
-            if isinstance(learning_backend, LearningProtocol):
-                learning_backend.learn(question, answer)
-                return True
+        learning_backend = self.backend
+        if isinstance(learning_backend, LearningProtocol):
+            learning_backend.learn(question, answer)
+            return True
         return False
 
     def process_one(self, user_input: str) -> ChatResult:

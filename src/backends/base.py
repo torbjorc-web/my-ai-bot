@@ -17,7 +17,7 @@ class BackendProtocol(Protocol):
     def stream_generate(self, user_input: str) -> Iterator[str]:
         ...
 
-    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+    def astream_generate(self, user_input: str) -> AsyncIterator[str]:
         ...
 
 
