@@ -624,6 +624,55 @@ class TestBot(unittest.TestCase):
             self.assertIn("I found this online", response)
             self.assertIn("/wiki/Kisumu", response)
 
+    def test_ambiguous_city_query_includes_did_you_mean_hint(self):
+        class _MockResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=cast(BackendProtocol, Bot().backend),
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=250,
+                cache_ttl_days=14,
+                allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
+            )
+
+            search_payload = (
+                '["springfield", ["Springfield, Illinois", "Springfield, Missouri", "Springfield, Massachusetts"], ["", "", ""], ["", "", ""] ]'
+            ).encode("utf-8")
+            summary_payload = (
+                '{"extract":"Springfield is the capital city of Illinois.",'
+                '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Springfield,_Illinois"}}}'
+            ).encode("utf-8")
+
+            def _mock_urlopen(req, timeout=0):
+                url = req.full_url
+                if "w/api.php" in url and "search=springfield" in url:
+                    return _MockResponse(search_payload)
+                if "page/summary/Springfield%2C%20Illinois" in url:
+                    return _MockResponse(summary_payload)
+                raise RuntimeError("Not Found")
+
+            with patch("src.backends.wrappers.request.urlopen", side_effect=_mock_urlopen):
+                response = backend.generate("Tell me about Springfield")
+
+            self.assertIn("Did you mean:", response)
+            self.assertIn("Springfield, Missouri", response)
+
     def test_create_backend_wraps_rule_based_with_internet_backend_when_enabled(self):
         backend = create_backend(
             "rule-based",

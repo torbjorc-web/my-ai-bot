@@ -465,22 +465,23 @@ class InternetAugmentedBackend:
     def _fetch_wikipedia_summary_with_status(
         self,
         user_input: str,
-    ) -> tuple[tuple[str, str] | None, bool]:
+    ) -> tuple[tuple[str, str] | None, bool, list[str]]:
         if self._is_major_cities_query(user_input):
             if self._is_capitals_query(user_input):
                 capitals_overview = self._get_capitals_overview()
                 if capitals_overview is not None:
-                    return capitals_overview, False
+                    return capitals_overview, False, []
 
             overview = self._get_major_cities_overview()
             if overview is not None:
-                return overview, False
+                return overview, False, []
 
         queries = self._build_city_topic_candidates(user_input)
         if not queries:
-            return None, False
+            return None, False, []
 
         had_lookup_error = False
+        suggestion_titles: list[str] = []
 
         for query in queries:
             candidate_titles: list[str] = [query]
@@ -488,6 +489,11 @@ class InternetAugmentedBackend:
             for matched_title in reversed(matched_titles):
                 if matched_title != query and matched_title not in candidate_titles:
                     candidate_titles.insert(0, matched_title)
+
+            if len(matched_titles) > 1:
+                for title in matched_titles[:3]:
+                    if title not in suggestion_titles:
+                        suggestion_titles.append(title)
 
             for title in candidate_titles:
                 safe_title = quote(title)
@@ -503,15 +509,15 @@ class InternetAugmentedBackend:
                     continue
                 if not self._is_allowed_source(content_url):
                     self.logger.info("Rejected source outside allowlist: %s", content_url)
-                    return None, False
+                    return None, False, []
 
                 trimmed = self._trim_summary(extract)
-                return (trimmed, content_url), False
+                return (trimmed, content_url), False, suggestion_titles
 
-        return None, had_lookup_error
+        return None, had_lookup_error, suggestion_titles
 
     def _fetch_wikipedia_summary(self, user_input: str) -> tuple[str, str] | None:
-        snippet, _ = self._fetch_wikipedia_summary_with_status(user_input)
+        snippet, _, _ = self._fetch_wikipedia_summary_with_status(user_input)
         return snippet
 
     def _fetch_duckduckgo_summary(self, user_input: str) -> tuple[str, str] | None:
@@ -553,18 +559,23 @@ class InternetAugmentedBackend:
 
         return None
 
-    def _fetch_online_sources(self, user_input: str) -> tuple[list[tuple[str, str]], dict[str, bool]]:
+    def _fetch_online_sources(self, user_input: str) -> tuple[list[tuple[str, str]], dict[str, bool | list[str]]]:
         fetchers = {
             "wikipedia": self._fetch_wikipedia_summary,
             "duckduckgo": self._fetch_duckduckgo_summary,
         }
         collected: list[tuple[str, str]] = []
         seen_urls: set[str] = set()
-        metadata = {"wikipedia_lookup_failed": False}
+        metadata: dict[str, bool | list[str]] = {
+            "wikipedia_lookup_failed": False,
+            "wikipedia_suggestions": [],
+        }
         for provider in self.source_providers:
             if provider == "wikipedia":
-                snippet, had_lookup_error = self._fetch_wikipedia_summary_with_status(user_input)
-                metadata["wikipedia_lookup_failed"] = metadata["wikipedia_lookup_failed"] or had_lookup_error
+                snippet, had_lookup_error, suggestions = self._fetch_wikipedia_summary_with_status(user_input)
+                metadata["wikipedia_lookup_failed"] = bool(metadata["wikipedia_lookup_failed"]) or had_lookup_error
+                if suggestions:
+                    metadata["wikipedia_suggestions"] = suggestions
             else:
                 fetcher = fetchers.get(provider)
                 if fetcher is None:
@@ -594,6 +605,11 @@ class InternetAugmentedBackend:
         web_answers, metadata = self._fetch_online_sources(user_input)
         if web_answers:
             response = self._format_response_multi(web_answers)
+            suggestions = metadata.get("wikipedia_suggestions", [])
+            if isinstance(suggestions, list) and len(suggestions) > 1:
+                shown = [item for item in suggestions[:3] if isinstance(item, str) and item.strip()]
+                if shown:
+                    response += "\n\nDid you mean: " + ", ".join(shown) + "?"
             self.cache[normalized] = {
                 "response": response,
                 "source_url": web_answers[0][1],
