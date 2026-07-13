@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
-from src.bot import Bot, FallbackBackend, InternetAugmentedBackend, create_backend
+from typing import cast
+from src.bot import BackendProtocol, Bot, FallbackBackend, InternetAugmentedBackend, create_backend
 
 
 class TestBot(unittest.TestCase):
@@ -180,7 +181,7 @@ class TestBot(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             cache_path = f"{tmp_dir}/internet-cache.json"
             backend = InternetAugmentedBackend(
-                primary=Bot().backend,
+                primary=cast(BackendProtocol, Bot().backend),
                 cache_path=cache_path,
                 timeout_seconds=2,
                 max_summary_chars=200,
@@ -195,7 +196,7 @@ class TestBot(unittest.TestCase):
                 '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Python_(programming_language)"}}}'
             ).encode("utf-8")
 
-            with patch("src.bot.request.urlopen", return_value=_MockResponse(payload)) as mocked_urlopen:
+            with patch("src.backends.wrappers.request.urlopen", return_value=_MockResponse(payload)) as mocked_urlopen:
                 first = backend.generate("What is Python?")
                 second = backend.generate("What is Python?")
 
@@ -221,7 +222,7 @@ class TestBot(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             cache_path = f"{tmp_dir}/internet-cache.json"
             backend = InternetAugmentedBackend(
-                primary=Bot().backend,
+                primary=cast(BackendProtocol, Bot().backend),
                 cache_path=cache_path,
                 timeout_seconds=2,
                 max_summary_chars=200,
@@ -236,7 +237,7 @@ class TestBot(unittest.TestCase):
                 '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Python_(programming_language)"}}}'
             ).encode("utf-8")
 
-            with patch("src.bot.request.urlopen", return_value=_MockResponse(payload)) as mocked_urlopen:
+            with patch("src.backends.wrappers.request.urlopen", return_value=_MockResponse(payload)) as mocked_urlopen:
                 backend.generate("What is Python?")
                 backend.generate("What is Python?")
 
@@ -259,7 +260,7 @@ class TestBot(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             cache_path = f"{tmp_dir}/internet-cache.json"
             backend = InternetAugmentedBackend(
-                primary=Bot().backend,
+                primary=cast(BackendProtocol, Bot().backend),
                 cache_path=cache_path,
                 timeout_seconds=2,
                 max_summary_chars=200,
@@ -284,7 +285,7 @@ class TestBot(unittest.TestCase):
                     return _MockResponse(wiki_payload)
                 return _MockResponse(ddg_payload)
 
-            with patch("src.bot.request.urlopen", side_effect=_mock_urlopen):
+            with patch("src.backends.wrappers.request.urlopen", side_effect=_mock_urlopen):
                 response = backend.generate("What is Python?")
 
             self.assertIn("Sources:", response)
@@ -310,7 +311,7 @@ class TestBot(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             cache_path = f"{tmp_dir}/internet-cache.json"
             backend = InternetAugmentedBackend(
-                primary=Bot().backend,
+                primary=cast(BackendProtocol, Bot().backend),
                 cache_path=cache_path,
                 timeout_seconds=2,
                 max_summary_chars=200,
@@ -325,7 +326,7 @@ class TestBot(unittest.TestCase):
                 '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Python_(programming_language)"}}}'
             ).encode("utf-8")
 
-            with patch("src.bot.request.urlopen", return_value=_MockResponse(payload)):
+            with patch("src.backends.wrappers.request.urlopen", return_value=_MockResponse(payload)):
                 response = backend.generate("What is Python?")
 
             self.assertIn("not sure how to respond", response.lower())
