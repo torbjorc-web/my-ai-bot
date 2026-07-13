@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 from tempfile import TemporaryDirectory
-from src.bot import Bot, FallbackBackend, create_backend
+from src.bot import Bot, FallbackBackend, InternetAugmentedBackend, create_backend
 
 
 class TestBot(unittest.TestCase):
@@ -46,6 +47,10 @@ class TestBot(unittest.TestCase):
             learning_store_path="data/test-learned.json",
             learning_min_similarity=0.70,
             system_prompt_path="src/prompts/system_prompt.txt",
+            enable_internet_learning=False,
+            internet_cache_path="data/test-internet-cache.json",
+            internet_timeout_seconds=8,
+            internet_max_summary_chars=700,
         )
         self.assertIsInstance(backend, FallbackBackend)
 
@@ -63,6 +68,10 @@ class TestBot(unittest.TestCase):
                 learning_store_path="data/test-learned.json",
                 learning_min_similarity=0.70,
                 system_prompt_path="src/prompts/system_prompt.txt",
+                enable_internet_learning=False,
+                internet_cache_path="data/test-internet-cache.json",
+                internet_timeout_seconds=8,
+                internet_max_summary_chars=700,
             )
 
     def test_learning_persists_custom_response(self):
@@ -80,6 +89,10 @@ class TestBot(unittest.TestCase):
                 learning_store_path=store_path,
                 learning_min_similarity=0.70,
                 system_prompt_path="src/prompts/system_prompt.txt",
+                enable_internet_learning=False,
+                internet_cache_path="data/test-internet-cache.json",
+                internet_timeout_seconds=8,
+                internet_max_summary_chars=700,
             )
             bot = Bot(backend=backend)
             taught = bot.learn("how do you feel", "I feel ready to help.")
@@ -98,6 +111,10 @@ class TestBot(unittest.TestCase):
                 learning_store_path=store_path,
                 learning_min_similarity=0.70,
                 system_prompt_path="src/prompts/system_prompt.txt",
+                enable_internet_learning=False,
+                internet_cache_path="data/test-internet-cache.json",
+                internet_timeout_seconds=8,
+                internet_max_summary_chars=700,
             )
             bot_reloaded = Bot(backend=backend_reloaded)
             self.assertIn("ready to help", bot_reloaded.get_response("how do you feel"))
@@ -117,10 +134,71 @@ class TestBot(unittest.TestCase):
                 learning_store_path=store_path,
                 learning_min_similarity=0.70,
                 system_prompt_path="src/prompts/system_prompt.txt",
+                enable_internet_learning=False,
+                internet_cache_path="data/test-internet-cache.json",
+                internet_timeout_seconds=8,
+                internet_max_summary_chars=700,
             )
             bot = Bot(backend=backend)
             bot.learn("how do you feel", "I feel calm and focused.")
             self.assertIn("calm and focused", bot.get_response("how are you feeling"))
+
+    def test_internet_augmented_backend_uses_cache_after_first_lookup(self):
+        class _MockResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=Bot().backend,
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=200,
+            )
+
+            payload = (
+                '{"extract":"Python is a programming language.",' 
+                '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Python_(programming_language)"}}}'
+            ).encode("utf-8")
+
+            with patch("src.bot.request.urlopen", return_value=_MockResponse(payload)) as mocked_urlopen:
+                first = backend.generate("What is Python?")
+                second = backend.generate("What is Python?")
+
+            self.assertIn("I found this online", first)
+            self.assertIn("wikipedia.org", first)
+            self.assertEqual(first, second)
+            self.assertEqual(1, mocked_urlopen.call_count)
+
+    def test_create_backend_wraps_rule_based_with_internet_backend_when_enabled(self):
+        backend = create_backend(
+            "rule-based",
+            openai_api_key="",
+            openai_model="gpt-4o-mini",
+            openai_temperature=0.2,
+            ollama_host="http://127.0.0.1:11434",
+            ollama_model="llama3.1",
+            allow_backend_fallback=True,
+            enable_learning=False,
+            learning_store_path="data/test-learned.json",
+            learning_min_similarity=0.70,
+            system_prompt_path="src/prompts/system_prompt.txt",
+            enable_internet_learning=True,
+            internet_cache_path="data/test-internet-cache.json",
+            internet_timeout_seconds=8,
+            internet_max_summary_chars=700,
+        )
+        self.assertIsInstance(backend, InternetAugmentedBackend)
 
 
 class TestBotAsync(unittest.IsolatedAsyncioTestCase):

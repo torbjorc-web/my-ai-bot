@@ -18,4 +18,8 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 ENABLE_LEARNING = os.getenv("ENABLE_LEARNING", "1") == "1"
 LEARNING_STORE_PATH = os.getenv("LEARNING_STORE_PATH", "data/learned_responses.json")
 LEARNING_MIN_SIMILARITY = float(os.getenv("LEARNING_MIN_SIMILARITY", "0.70"))
+ENABLE_INTERNET_LEARNING = os.getenv("ENABLE_INTERNET_LEARNING", "0") == "1"
+INTERNET_CACHE_PATH = os.getenv("INTERNET_CACHE_PATH", "data/internet_cache.json")
+INTERNET_TIMEOUT_SECONDS = int(os.getenv("INTERNET_TIMEOUT_SECONDS", "8"))
+INTERNET_MAX_SUMMARY_CHARS = int(os.getenv("INTERNET_MAX_SUMMARY_CHARS", "700"))
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH", "src/prompts/system_prompt.txt")

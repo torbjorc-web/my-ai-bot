@@ -7,6 +7,7 @@ Python AI chatbot demo project with:
 - Asyncio-based concurrent message processing
 - Optional real LLM backend with OpenAI
 - Token-free local model backend via Ollama
+- Optional internet retrieval with local answer cache
 - Streaming responses for supported backends
 - Interactive and non-interactive demo modes
 - Unit tests and usage documentation
@@ -19,6 +20,7 @@ Python AI chatbot demo project with:
 - Optional OpenAI chat backend (`--backend openai`)
 - Optional local Ollama backend (`--backend ollama`)
 - Automatic fallback chain: OpenAI -> Ollama -> rule-based
+- Optional Wikipedia lookup and cached reuse for repeated questions
 - Streaming output in interactive and async chat modes (`--stream`)
 - Logging configured in one place (`INFO` by default)
 - CLI demo switch for fast presentations
@@ -134,6 +136,20 @@ Teach the bot new answers at runtime:
 
 Then ask the same question again and it will use your taught answer. Learned responses are stored in `data/learned_responses.json` by default.
 Similar phrasing is also matched with fuzzy similarity (configurable via `LEARNING_MIN_SIMILARITY`).
+
+Enable internet retrieval and cache answers locally for next time:
+
+```powershell
+$env:ENABLE_INTERNET_LEARNING = "1"
+python -m src.main
+```
+
+When enabled, the bot will try a Wikipedia summary lookup first and store successful results in `data/internet_cache.json`.
+You can tune behavior with these environment variables:
+
+- `INTERNET_CACHE_PATH` (default `data/internet_cache.json`)
+- `INTERNET_TIMEOUT_SECONDS` (default `8`)
+- `INTERNET_MAX_SUMMARY_CHARS` (default `700`)
 
 ## Logging
 

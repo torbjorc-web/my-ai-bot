@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Iterable, Iterator, Protocol, runtime_checkable
+from urllib.parse import quote
 from urllib import request
 
 
@@ -364,6 +365,107 @@ class LearnedBackend:
             yield chunk
 
 
+class InternetAugmentedBackend:
+    """Online retrieval wrapper with local cache for repeated questions."""
+
+    def __init__(
+        self,
+        primary: BackendProtocol,
+        cache_path: str,
+        timeout_seconds: int,
+        max_summary_chars: int,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self.primary = primary
+        self.cache_path = cache_path
+        self.timeout_seconds = timeout_seconds
+        self.max_summary_chars = max_summary_chars
+        self.logger = logger or logging.getLogger(self.__class__.__name__)
+        self.cache = self._load_cache()
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        return " ".join(text.strip().lower().split())
+
+    def _load_cache(self) -> dict[str, str]:
+        path = Path(self.cache_path)
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {self._normalize(k): str(v) for k, v in data.items()}
+        except Exception as exc:
+            self.logger.warning("Could not load internet cache, starting empty: %s", exc)
+        return {}
+
+    def _save_cache(self) -> None:
+        path = Path(self.cache_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.cache, indent=2), encoding="utf-8")
+
+    def _fetch_wikipedia_summary(self, user_input: str) -> str | None:
+        query = self._normalize(user_input)
+        if not query:
+            return None
+
+        safe_query = quote(query)
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{safe_query}"
+
+        req = request.Request(
+            url=url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "my-ai-bot/1.0 (internet-learning)",
+            },
+            method="GET",
+        )
+
+        try:
+            with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            self.logger.info("Wikipedia lookup failed for '%s': %s", query, exc)
+            return None
+
+        extract = str(data.get("extract", "")).strip()
+        content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+        if not extract:
+            return None
+
+        trimmed = extract[: self.max_summary_chars].rstrip()
+        if len(extract) > self.max_summary_chars:
+            trimmed += "..."
+
+        if content_url:
+            return f"{trimmed}\nSource: {content_url}"
+        return trimmed
+
+    def generate(self, user_input: str) -> str:
+        normalized = self._normalize(user_input)
+        cached = self.cache.get(normalized)
+        if cached is not None:
+            return cached
+
+        web_answer = self._fetch_wikipedia_summary(user_input)
+        if web_answer is not None:
+            response = f"I found this online:\n{web_answer}"
+            self.cache[normalized] = response
+            self._save_cache()
+            return response
+
+        return self.primary.generate(user_input)
+
+    async def agenerate(self, user_input: str) -> str:
+        return await asyncio.to_thread(self.generate, user_input)
+
+    def stream_generate(self, user_input: str) -> Iterator[str]:
+        yield self.generate(user_input)
+
+    async def astream_generate(self, user_input: str) -> AsyncIterator[str]:
+        yield await self.agenerate(user_input)
+
+
 class Bot:
     """Simple AI-like chatbot with deterministic responses and batching support."""
 
@@ -465,6 +567,10 @@ def create_backend(
     learning_store_path: str,
     learning_min_similarity: float,
     system_prompt_path: str,
+    enable_internet_learning: bool,
+    internet_cache_path: str,
+    internet_timeout_seconds: int,
+    internet_max_summary_chars: int,
 ) -> BackendProtocol:
     """Factory for selecting chatbot backend by name."""
     normalized = backend_name.strip().lower()
@@ -484,6 +590,14 @@ def create_backend(
 
     if normalized == "ollama":
         selected: BackendProtocol = local_chain
+        if enable_internet_learning:
+            selected = InternetAugmentedBackend(
+                primary=selected,
+                cache_path=internet_cache_path,
+                timeout_seconds=internet_timeout_seconds,
+                max_summary_chars=internet_max_summary_chars,
+                logger=logger,
+            )
         if enable_learning:
             return LearnedBackend(
                 primary=selected,
@@ -520,6 +634,15 @@ def create_backend(
         else:
             selected = openai_backend
 
+        if enable_internet_learning:
+            selected = InternetAugmentedBackend(
+                primary=selected,
+                cache_path=internet_cache_path,
+                timeout_seconds=internet_timeout_seconds,
+                max_summary_chars=internet_max_summary_chars,
+                logger=logger,
+            )
+
         if enable_learning:
             return LearnedBackend(
                 primary=selected,
@@ -530,6 +653,14 @@ def create_backend(
         return selected
 
     selected = RuleBasedBackend()
+    if enable_internet_learning:
+        selected = InternetAugmentedBackend(
+            primary=selected,
+            cache_path=internet_cache_path,
+            timeout_seconds=internet_timeout_seconds,
+            max_summary_chars=internet_max_summary_chars,
+            logger=logger,
+        )
     if enable_learning:
         return LearnedBackend(
             primary=selected,

@@ -10,7 +10,11 @@ from src.bot import Bot, create_backend
 from src.config.settings import (
     ALLOW_BACKEND_FALLBACK,
     DEFAULT_BACKEND,
+    ENABLE_INTERNET_LEARNING,
     ENABLE_LEARNING,
+    INTERNET_CACHE_PATH,
+    INTERNET_MAX_SUMMARY_CHARS,
+    INTERNET_TIMEOUT_SECONDS,
     LEARNING_MIN_SIMILARITY,
     LEARNING_STORE_PATH,
     LOG_FILE,
@@ -183,6 +187,10 @@ def main() -> None:
         learning_store_path=LEARNING_STORE_PATH,
         learning_min_similarity=LEARNING_MIN_SIMILARITY,
         system_prompt_path=SYSTEM_PROMPT_PATH,
+        enable_internet_learning=ENABLE_INTERNET_LEARNING,
+        internet_cache_path=INTERNET_CACHE_PATH,
+        internet_timeout_seconds=INTERNET_TIMEOUT_SECONDS,
+        internet_max_summary_chars=INTERNET_MAX_SUMMARY_CHARS,
     )
     bot = Bot(max_workers=MAX_WORKERS, backend=backend)
     if args.demo:
