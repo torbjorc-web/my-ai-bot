@@ -1,1 +1,6 @@
+# Optional backend dependency (required only when using --backend openai)
 openai>=1.0.0
+
+# Notes:
+# - Ollama integration uses the local HTTP API (no Python package required).
+# - Other functionality relies on Python standard library modules.
