@@ -332,21 +332,27 @@ class InternetAugmentedBackend:
             return None
         return first_title.strip() or None
 
-    def _fetch_wikipedia_summary(self, user_input: str) -> tuple[str, str] | None:
+    def _fetch_wikipedia_summary_with_status(
+        self,
+        user_input: str,
+    ) -> tuple[tuple[str, str] | None, bool]:
         query = self._normalize(user_input)
         if not query:
-            return None
+            return None, False
 
         candidate_titles: list[str] = [query]
         matched_title = self._search_wikipedia_title(query)
         if matched_title is not None and matched_title.lower() != query.lower():
             candidate_titles.insert(0, matched_title)
 
+        had_lookup_error = False
+
         for title in candidate_titles:
             safe_title = quote(title)
             url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{safe_title}"
             data = self._request_json(url)
             if data is None:
+                had_lookup_error = True
                 continue
 
             extract = str(data.get("extract", "")).strip()
@@ -355,12 +361,16 @@ class InternetAugmentedBackend:
                 continue
             if not self._is_allowed_source(content_url):
                 self.logger.info("Rejected source outside allowlist: %s", content_url)
-                return None
+                return None, False
 
             trimmed = self._trim_summary(extract)
-            return trimmed, content_url
+            return (trimmed, content_url), False
 
-        return None
+        return None, had_lookup_error
+
+    def _fetch_wikipedia_summary(self, user_input: str) -> tuple[str, str] | None:
+        snippet, _ = self._fetch_wikipedia_summary_with_status(user_input)
+        return snippet
 
     def _fetch_duckduckgo_summary(self, user_input: str) -> tuple[str, str] | None:
         query = self._normalize(user_input)
@@ -395,20 +405,24 @@ class InternetAugmentedBackend:
 
         return self._trim_summary(abstract_text), abstract_url
 
-    def _fetch_online_sources(self, user_input: str) -> list[tuple[str, str]]:
+    def _fetch_online_sources(self, user_input: str) -> tuple[list[tuple[str, str]], dict[str, bool]]:
         fetchers = {
             "wikipedia": self._fetch_wikipedia_summary,
             "duckduckgo": self._fetch_duckduckgo_summary,
         }
         collected: list[tuple[str, str]] = []
         seen_urls: set[str] = set()
+        metadata = {"wikipedia_lookup_failed": False}
         for provider in self.source_providers:
-            fetcher = fetchers.get(provider)
-            if fetcher is None:
-                self.logger.info("Unknown source provider configured: %s", provider)
-                continue
-
-            snippet = fetcher(user_input)
+            if provider == "wikipedia":
+                snippet, had_lookup_error = self._fetch_wikipedia_summary_with_status(user_input)
+                metadata["wikipedia_lookup_failed"] = metadata["wikipedia_lookup_failed"] or had_lookup_error
+            else:
+                fetcher = fetchers.get(provider)
+                if fetcher is None:
+                    self.logger.info("Unknown source provider configured: %s", provider)
+                    continue
+                snippet = fetcher(user_input)
             if snippet is None:
                 continue
 
@@ -421,7 +435,7 @@ class InternetAugmentedBackend:
             if len(collected) >= self.max_sources:
                 break
 
-        return collected
+        return collected, metadata
 
     def generate(self, user_input: str) -> str:
         normalized = self._normalize(user_input)
@@ -429,7 +443,7 @@ class InternetAugmentedBackend:
         if cached is not None and not self._is_stale(cached.get("fetched_at", "")):
             return cached["response"]
 
-        web_answers = self._fetch_online_sources(user_input)
+        web_answers, metadata = self._fetch_online_sources(user_input)
         if web_answers:
             response = self._format_response_multi(web_answers)
             self.cache[normalized] = {
@@ -443,7 +457,14 @@ class InternetAugmentedBackend:
         if cached is not None:
             return cached["response"]
 
-        return self.primary.generate(user_input)
+        fallback = self.primary.generate(user_input)
+        if metadata.get("wikipedia_lookup_failed", False):
+            return (
+                f"{fallback}\n\n"
+                "Note: Wikipedia lookup failed for this query. "
+                "Try a more specific search phrase."
+            )
+        return fallback
 
     async def agenerate(self, user_input: str) -> str:
         return await asyncio.to_thread(self.generate, user_input)

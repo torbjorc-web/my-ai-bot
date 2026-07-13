@@ -380,6 +380,26 @@ class TestBot(unittest.TestCase):
             self.assertIn("I found this online", response)
             self.assertIn("wikipedia.org", response)
 
+    def test_user_sees_note_when_wikipedia_lookup_fails(self):
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=cast(BackendProtocol, Bot().backend),
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=200,
+                cache_ttl_days=14,
+                allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
+            )
+
+            with patch("src.backends.wrappers.request.urlopen", side_effect=RuntimeError("Not Found")):
+                response = backend.generate("What is Python?")
+
+            self.assertIn("wikipedia lookup failed", response.lower())
+            self.assertIn("more specific", response.lower())
+
     def test_create_backend_wraps_rule_based_with_internet_backend_when_enabled(self):
         backend = create_backend(
             "rule-based",
