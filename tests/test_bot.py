@@ -489,6 +489,45 @@ class TestBot(unittest.TestCase):
             self.assertIn("drammen", response.lower())
             self.assertIn("/wiki/Global_city", response)
 
+    def test_major_capitals_query_returns_capitals_overview(self):
+        class _MockResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with TemporaryDirectory() as tmp_dir:
+            cache_path = f"{tmp_dir}/internet-cache.json"
+            backend = InternetAugmentedBackend(
+                primary=cast(BackendProtocol, Bot().backend),
+                cache_path=cache_path,
+                timeout_seconds=2,
+                max_summary_chars=300,
+                cache_ttl_days=14,
+                allowed_domains=("wikipedia.org",),
+                source_providers=("wikipedia",),
+                max_sources=1,
+            )
+
+            payload = (
+                '{"extract":"A capital city is the municipality holding primary status in a country or region.",'
+                '"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Capital_city"}}}'
+            ).encode("utf-8")
+
+            with patch("src.backends.wrappers.request.urlopen", return_value=_MockResponse(payload)):
+                response = backend.generate("What are major capitals in the world?")
+
+            self.assertIn("major capital examples", response.lower())
+            self.assertIn("oslo", response.lower())
+            self.assertIn("/wiki/Capital_city", response)
+
     def test_specific_city_query_extracts_city_topic(self):
         class _MockResponse:
             def __init__(self, payload: bytes):

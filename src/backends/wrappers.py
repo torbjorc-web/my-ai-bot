@@ -247,6 +247,11 @@ class InternetAugmentedBackend:
         )
         return has_city_topic and is_broad
 
+    @staticmethod
+    def _is_capitals_query(user_input: str) -> bool:
+        query = user_input.lower()
+        return "capital" in query or "capitals" in query
+
     def _build_city_topic_candidates(self, user_input: str) -> list[str]:
         candidates = self._build_query_candidates(user_input)
         city_terms = {
@@ -295,6 +300,26 @@ class InternetAugmentedBackend:
             "Major examples: London, New York City, Tokyo, Paris, Singapore, Dubai, "
             "Oslo, Stockholm, Copenhagen, and Drammen.\n"
             "Tip: ask for one city directly, for example: 'Tell me about Drammen'."
+        )
+        return f"{self._trim_summary(extract)}\n\n{curated}", content_url
+
+    def _get_capitals_overview(self) -> tuple[str, str] | None:
+        summary_url = "https://en.wikipedia.org/api/rest_v1/page/summary/Capital_city"
+        data = self._request_json(summary_url)
+        if data is None:
+            return None
+
+        extract = str(data.get("extract", "")).strip()
+        content_url = str(data.get("content_urls", {}).get("desktop", {}).get("page", "")).strip()
+        if not extract or not content_url:
+            return None
+        if not self._is_allowed_source(content_url):
+            return None
+
+        curated = (
+            "Major capital examples: Oslo (Norway), Stockholm (Sweden), Copenhagen (Denmark), "
+            "London (UK), Paris (France), Tokyo (Japan), and Washington, D.C. (USA).\n"
+            "Tip: ask for one capital directly, for example: 'Tell me about Oslo'."
         )
         return f"{self._trim_summary(extract)}\n\n{curated}", content_url
 
@@ -432,6 +457,11 @@ class InternetAugmentedBackend:
         user_input: str,
     ) -> tuple[tuple[str, str] | None, bool]:
         if self._is_major_cities_query(user_input):
+            if self._is_capitals_query(user_input):
+                capitals_overview = self._get_capitals_overview()
+                if capitals_overview is not None:
+                    return capitals_overview, False
+
             overview = self._get_major_cities_overview()
             if overview is not None:
                 return overview, False
