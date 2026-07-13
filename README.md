@@ -54,6 +54,10 @@ my-ai-bot
 
 ```bash
 python -m venv .venv
+# PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# Git Bash / WSL
 source .venv/bin/activate
 ```
 
@@ -68,26 +72,33 @@ pip install -r requirements.txt
 Interactive chat:
 
 ```bash
-python3 -m src.main
+python -m src.main
 ```
 
 Concurrent demo mode:
 
 ```bash
-python3 -m src.main --demo
+python -m src.main --demo
 ```
 
 Async demo mode:
 
 ```bash
-python3 -m src.main --async-demo
+python -m src.main --async-demo
 ```
 
 OpenAI backend mode:
 
 ```bash
 export OPENAI_API_KEY="your_key"
-python3 -m src.main --backend openai --demo
+python -m src.main --backend openai --demo
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:OPENAI_API_KEY = "your_key"
+python -m src.main --backend openai --demo
 ```
 
 Token-free local backend mode:
@@ -97,19 +108,19 @@ Token-free local backend mode:
 ollama pull llama3.1
 
 # run without any API token
-python3 -m src.main --backend ollama --demo
+python -m src.main --backend ollama --demo
 ```
 
 Async interactive chat loop:
 
 ```bash
-python3 -m src.main --async-chat
+python -m src.main --async-chat
 ```
 
 Streaming in chat mode:
 
 ```bash
-python3 -m src.main --backend openai --stream
+python -m src.main --backend openai --stream
 ```
 
 If no backend is provided, the default is `rule-based`.
